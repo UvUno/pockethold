@@ -1,11 +1,10 @@
-# Web Installer/Downloader for Flarum Beta
+# Pocketload - The first webinstaller for Flarum(ish)
+* Composer trough web. Upload and run style. 
 
-The goal is to have it download composer, then download latest beta for flarum, run composer install, and then, recurcivly delete any trace of composer, and unlink itself while redirecting to the flarum setup script.
+Currently working on plesk panel. 
 
-When the above work, the plan is to add flagrows bazar script as an optional install parameter, which in turn will allow flarum to work 100% without shell, except for updates obviously..
+Requirements: 
+(cUrl) - As of next commit. (Current uses a legacy php function which is often restricted or denied due to the security risks.)
+PHP Memory set to 256M - (Not currently tested properly.)
 
-Or at least that is what I hope :P 
-
-
-Credits (If it actually works): 
-https://codedump.io/share/f5W5vnPOI18q/1/run-composer-with-a-php-script-in-browser
+Any input on my coding is greatly appreciated. 
