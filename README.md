@@ -1,3 +1,6 @@
+<p align="center"> <img alt="PocketLoad" src="http://i.imgur.com/efZ8vHn.png"> </p>
+
+
 # Pocketload - The first webinstaller for Flarum(ish)
 * Composer trough web. Upload and run style. 
 
