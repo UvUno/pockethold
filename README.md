@@ -1,13 +1,13 @@
-<p align="center"> <img alt="PocketLoad" src="http://i.imgur.com/efZ8vHn.png"> </p>
+<img alt="PocketLoad" src="http://i.imgur.com/efZ8vHn.png">
 
 
-# Pocketload - The first webinstaller for Flarum(ish)
+# The first webinstaller for Flarum(?)
 * Composer trough web. Upload and run style. 
 
-Currently working on plesk panel. 
+Requirements.
+1.	cUrl or allow_url_fopen = true
+2.	PHP Memory limit 256M (Input needed if less memory works)
+Usage:
+Upload file where you want Flarum to be installed. Visit the the default: “yoururl.com/installer.php” (Or */installbazar.php)
 
-Requirements: 
-(cUrl) - As of next commit. (Current uses a legacy php function which is often restricted or denied due to the security risks.)
-PHP Memory set to 256M - (Not currently tested properly.)
-
-Any input on my coding is greatly appreciated. 
+The script will redirect you upon completion.
