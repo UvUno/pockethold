@@ -6,11 +6,10 @@
  * License: MIT
  * DISCLAIMER: THIS IS DIRTY. USE WITH CARE. SUGGESTIONS ARE WANTED. It was written as a
  */
-
+use Symfony\Component\Console\Input\StringInput;
 use Composer\Console\Application;
 use Composer\Command\CreateProjectCommand;
 use Composer\IO\IOInterface;
-//use Symfony\Component\Console\Input\StringInput;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -21,7 +20,7 @@ error_reporting(E_ALL);
 
 const GITHUB_TOKEN = 'ec785da935d5535e151f7b3386190265f00e8fe2';
 
-ini_set("memory_limit", "1G"); // Need 
+ini_set("memory_limit", "1G"); // Try to increase memory to needed levels
 if ( !defined('ABSPATH') )
 {
     define('ABSPATH', dirname(__FILE__) . '/');
@@ -86,38 +85,22 @@ function unphar($src, $dest)
     return true;
 }
 
-function plruncommand()
+function plruncommand($command)
 {
-    //Require composer
-    require_once($tmppath . 'vendor/autoload.php');
-
-    //Create the application and run
     $application = new Application();
-    $application->setAutoExit(false);
-    // first set the github token to prevent installation errors
-    $input = new ArrayInput([
-        'command'                 => 'config',
-        'github-oauth.github.com' => GITHUB_TOKEN
-    ]);
-    $application->run($input);
 
-        $input = new ArrayInput([
-            'command'                 => 'create-project',
-            'package' => 'flarum/flarum',
-            'stability' => 'beta'
-        ]);
-    //$input = new StringInput('create-project flarum/flarum --stability=beta');
+
+
+
+
+    $input = new StringInput($command);
+    $application->setAutoExit(false);
     $application->run($input);
     unset($input);
     unset($application);
 }
 
-function poststatus()
-{
-    $status = 0;
-    return $status;
-}
-
+// **************** 3rd party Helper Functions
 /**
  * Recursively delete files
  * Credits: http://stackoverflow.com/questions/3338123/how-do-i-recursively-delete-a-directory-and-its-entire-contents-files-sub-dir
@@ -173,18 +156,15 @@ function rmove($src, $dest)
     unlink($src);
 }
 
-if(isset($_POST["ajax"]) && !empty($_POST["ajax"])){
 
-    if(isset($_POST["ajax"]) == 'status')
-    {
 
-        echo json_encode(poststatus());
 
-        poststatus();
-    }
-    elseif(isset($_POST["ajax"]) == 'init')
-    {
-        $maxtries = '0';
+
+if(isset($_POST["ajax"]) && isset($_POST["ajax"]) == "install") {
+    try {
+
+
+        !$maxtries = '0';
         while (!file_exists($tmppath . 'vendor/autoload.php')) {
 
             if ( $maxtries >= '3' ) {
@@ -198,51 +178,52 @@ if(isset($_POST["ajax"]) && !empty($_POST["ajax"])){
             }
             $maxtries++;
         }
-        if ( $maxtries >= '3' )
-        {
-            echo json_encode(array(
-                'success' => true,
-            ));
-        }
-        else
-        {
-            echo json_encode(array(
-                'success' => false,
-            ));
-        }
 
-    }
-    elseif(isset($_POST["ajax"]) == 'composer')
-    {
-        plruncommand();
-        if(!file_exists("./flarum/index.php"))
-        {
-            echo json_encode(array(
-                'success' => false,
-            ));
-        }
-        else
-        {
-            echo json_encode(array(
-                'success' => true,
-            ));
-        }
-    }
-    elseif(isset($_POST["ajax"]) == 'cleanup')
-    {
+
+        /*
+        if(!file_exists($tmppath . 'vendor/autoload.php')){
+            die("Loading composer failed");
+        } else {} */
+
+        require_once($tmppath . 'vendor/autoload.php');
+        //Create the application and run it with the commands
+        $application = new Application();
+        $application->setAutoExit(false);
+
+
+        // first set the github token to prevent installation errors
+        $input = new ArrayInput([
+            'command'                 => 'config',
+            'github-oauth.github.com' => GITHUB_TOKEN
+        ]);
+        $application->run($input);
+
+
+        $input = new StringInput('create-project flarum/flarum --stability=beta');
+        $application->run($input);
+        unset($input);
+        unset($application);
         rmove(ABSPATH . 'flarum', ABSPATH);
         removeinstaller($tmppath);
         echo json_encode(array(
             'success' => true,
         ));
+
+    } catch (Exception $ex) {
+
+        echo json_encode(array(
+            'success' => false,
+            'reason' => $ex->getMessage(),
+        ));
     }
-    else
+}
+elseif (isset($_POST["ajax"]) == "complete")
+{
+rmove(ABSPATH . 'flarum', ABSPATH);
+    removeinstaller($tmppath);
+}
+else
     {
-        die("Access denied!");
-    }
-
-
-} else {
         ?>
         <!DOCTYPE html>
         <html lang="en">
@@ -266,10 +247,9 @@ if(isset($_POST["ajax"]) && !empty($_POST["ajax"])){
                 </div>
             </div>
         </div>
-
         <script>
-            $('.btn').click(function()
-            {$( ".btn" ).replaceWith( '<h2 class="instal1">Downloading. Please wait.</h2>' );
+            $('.btn').click(function(){
+                $( ".btn" ).replaceWith( '<h2 class="instal1">Downloading. Please wait.</h2>' );
                 return $.ajax({
                     url: window.location.href,
                     data: {ajax: "install"},
