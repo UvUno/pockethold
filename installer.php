@@ -182,7 +182,7 @@ if(isset($_POST["ajax"]) && !empty($_POST["ajax"])){
 
         poststatus();
     }
-    elseif(isset($_POST["ajax"]) == 'init')
+    elseif(isset($_POST["ajax"]) == 'prepare')
     {
         $maxtries = '0';
         while (!file_exists($tmppath . 'vendor/autoload.php')) {
@@ -272,13 +272,13 @@ if(isset($_POST["ajax"]) && !empty($_POST["ajax"])){
                 $.ajax({
                     url: window.location.href,
                     data: {ajax: "status"},
-                    type: 'get'
+                    type: 'post'
                 })
                     .done(function(res) {
                         console.log(res);
                         if (res = 'init') {
                             $( "#btnstart" ).replaceWith( '<span id="btnprepare" class="btn btn-primary btn-lg" role="button">Step 1: Prepare</span>' );
-                        }, else if (res = 'composer') {
+                        } else if (res = 'composer') {
                             $( "#btnstart" ).replaceWith( '<span id="btncompose" class="btn btn-primary btn-lg" role="button">Step 2: Install</span>' );
                         } else if (res = 'composer') {
                             $("#btnstart").replaceWith('<span id="btncleanup" class="btn btn-primary btn-lg" role="button">Step 3: Cleanup (Will redirect upon finish)</span>');
@@ -290,24 +290,29 @@ if(isset($_POST["ajax"]) && !empty($_POST["ajax"])){
                         $( ".install" ).replaceWith( '<h2 class="instal1">Error:' + err.status + '</h2>' );
                     });
             });
-            $('#btnprepare').click(function()
-            {$( "#btnprepare" ).replaceWith( '<h2 class="instal1">Please wait.</h2>' );
-                return $.ajax({
-                    url: window.location.href,
-                    data: {ajax: "prepare"},
-                    type: 'post'
-                })
-                    .done(function(res) {
-                        console.log(res);
-                        $( ".instal1" ).replaceWith( '<span id="btncompose" class="btn btn-primary btn-lg" role="button">Step 2: Install</span>' );
+
+            $(document).ready ( function () {
+                $(document).on ("click", "#btnprepare", function () {
+                    $( "#btnprepare" ).replaceWith( '<h2 class="instal1">Please wait.</h2>' );
+                    return $.ajax({
+                        url: window.location.href,
+                        data: {ajax: "prepare"},
+                        type: 'post'
                     })
-                    .fail(function(err) {
-                        console.log('Error: ' + err.status);
-                        $( ".install" ).replaceWith( '<h2 class="instal1">Error:' + err.status + '</h2>' );
-                    });
+                        .done(function(res) {
+                            console.log(res);
+                            $( ".instal1" ).replaceWith( '<span id="btncompose" class="btn btn-primary btn-lg" role="button">Step 2: Install</span>' );
+                        })
+                        .fail(function(err) {
+                            console.log('Error: ' + err.status);
+                            $( ".install" ).replaceWith( '<h2 class="instal1">Error:' + err.status + '</h2>' );
+                        });
+                });
             });
-            $('#btncompose').click(function()
-            {$( "#btncompose" ).replaceWith( '<h2 class="instal1">Downloading. Please wait.</h2>' );
+
+            $(document).ready ( function () {
+                $(document).on ("click", "#btncompose", function () {
+                $( "#btncompose" ).replaceWith( '<h2 class="instal1">Downloading. Please wait.</h2>' );
                 return $.ajax({
                     url: window.location.href,
                     data: {ajax: "prepare"},
@@ -322,22 +327,30 @@ if(isset($_POST["ajax"]) && !empty($_POST["ajax"])){
                         $( ".install" ).replaceWith( '<h2 class="instal1">Error:' + err.status + '</h2>' );
                     });
             });
-            $('#btncleanup').click(function()
-            {$( "#btncleanup" ).replaceWith( '<h2 class="instal1">Cleaning up - Redirecting Shortly</h2>' );
-                return $.ajax({
-                    url: window.location.href,
-                    data: {ajax: "prepare"},
-                    type: 'post'
-                })
-                    .done(function(res) {
-                        console.log(res);
-
-                    })
-                    .fail(function(err) {
-                        console.log('Error: ' + err.status);
-                        $( ".install" ).replaceWith( '<h2 class="instal1">Error:' + err.status + '</h2>' );
-                    });
             });
+
+
+
+
+            $(document).ready ( function () {
+                $(document).on ("click", "#btncleanup", function () {
+                    $( "#btncleanup" ).replaceWith( '<h2 class="instal1">Cleaning up - Redirecting Shortly</h2>' );
+                    return $.ajax({
+                        url: window.location.href,
+                        data: {ajax: "prepare"},
+                        type: 'post'
+                    })
+                        .done(function(res) {
+                            console.log(res);
+
+                        })
+                        .fail(function(err) {
+                            console.log('Error: ' + err.status);
+                            $( ".install" ).replaceWith( '<h2 class="instal1">Error:' + err.status + '</h2>' );
+                        });
+                });
+            });
+
         </script>
         </body>
         </html>
