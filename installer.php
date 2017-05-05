@@ -75,7 +75,7 @@ function poststatus($temp, $path)
 {
     $i = "prepare";
 
-    if(file_exists($temp . 'ventor/autoload.php'))
+    if(file_exists($temp . 'vendor/autoload.php'))
     {
         $i = "composer";
     }
