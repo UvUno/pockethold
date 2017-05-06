@@ -6,7 +6,6 @@
  * License: MIT
  * DISCLAIMER: THIS IS DIRTY. USE WITH CARE. SUGGESTIONS ARE WANTED. It was written as a
  */
-
 use Composer\Console\Application;
 use Composer\Command\CreateProjectCommand;
 use Composer\IO\IOInterface;
@@ -14,23 +13,50 @@ use Symfony\Component\Console\Input\StringInput;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 
-ini_set('max_execution_time', 400); //300 seconds = 5 minutes
-set_time_limit(300);
+//Set error reporting
 error_reporting(E_ALL);
 
+//Attempt at fixing Github - Need a new one, as this one is the same Lucious used in his concept.
 const GITHUB_TOKEN = 'ec785da935d5535e151f7b3386190265f00e8fe2';
 
-ini_set("memory_limit", "512M"); // Need
+//Increase Memory Limit. First attempt at setting 1G. If this fails, check if memory is 512 or more. Die if not.
+$ini_get_option_details = ini_get_all ();
+if ($ini_get_option_details['memory_limit']['access'] & INI_USER)
+{
+    ini_set('memory_limit', '1G');
+    //  phlog('Memory: Attempte to set 1GB Memory Limit. ');
+    //  phlog('Memory: Set to' . ini_get['memory_limit'] );
+}
+if($ini_get_option_details['memory_limit'] >= '512M')
+{
+    // phlog('Memory: ' . ini_get['memory_limit'] );
+}
+else
+{
+    //  phlog('Memory: Not enough memory. Memory set at: ' .ini_get['memory_limit'] );
+    die();
+}
+
+
+
+
+//Then check if this was allowed.
 if ( !defined('ABSPATH') )
 {
     define('ABSPATH', dirname(__FILE__) . '/');
 }
-
 $tmppath = (ABSPATH . 'temp/');
-
 if ( !file_exists($tmppath) )
 {
     mkdir($tmppath);
+}
+
+
+/**
+ * phlog write log requests to temp/install.log
+ */
+function phlog(){
+
 }
 
 /**
@@ -158,10 +184,9 @@ if(isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"])){
 
         if (!file_exists($tmppath . 'composer.phar')) {
             getfile("https://getcomposer.org/composer.phar", $tmppath . 'composer.phar');
-            $composer = new Phar($tmppath . "composer.phar");
-            $composer->extractTo($tmppath);
         }
-
+        $composer = new Phar($tmppath . "composer.phar");
+        $composer->extractTo($tmppath);
         echo "Prepare: Completed";
     }
     elseif($_REQUEST["ajax"] == 'composer')
@@ -225,15 +250,54 @@ if(isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"])){
     </div>
 
     <script>
+        //Javascript refactor pass 1. - Cleanup, comments and reusable code.
 
+        /*
+         *
+         *
+         * */
+
+        //First - Lets set up some variables
         var timer;
         var count = 0;
+        var preparebrn = '<span id="preparebtn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Prepare</span>';
+        var cleanupbtn = '<span id="cleanupbtn" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="btnbazaar" class="btn btn-lg" role="button">Install Bazaar</span>';
+        var composerbtn = '<span id="composerbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Install</span>';
+
+        // Functions
+
+        // phajax function creates a reusable wrapper for common ajax calls. Shorting down codebase.
+        function phajax(phtype, phdata, pherrm, phsuccess, phclick, phfailfunc, phsuccessfunc) {
+            $(document).on ("click", phclick, function () {
+                return $.ajax({
+                    url: window.location.href,
+                    data: {ajax: phdata},
+                    type: phtype
+                })
+                    .done(function(res) {
+                        console.log(res);
+                        $( ".instal1" ).replaceWith(phsuccess);
+                        if (phsuccessfunc) {
+                            eval(phsuccessfunc);
+                        }
+                    })
+                    .fail(function(err) {
+                        console.log('Error: ' + err.status);
+                        $( ".install" ).replaceWith(pherrm);
+                        if (phfailfunc) {
+                            eval(phfailfunc);
+                        }
+                    })
+            });
+        };
+
+        //Status checker used during the composer install
         function poll(url) {
             timer = setTimeout(function() {
                 $.ajax({
                     url: url,
                     data: {ajax: "status"},
-                    type: 'post'
+                    type: 'get'
                 })
                     .done(function(data) {
                         if (data === 'cleanup') {
@@ -254,9 +318,7 @@ if(isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"])){
             },5000)
         };
 
-
-
-
+        // Runs at startup.
         $( document ).ready(function() {
             $.ajax({
                 url: window.location.href,
@@ -266,11 +328,11 @@ if(isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"])){
                 .done(function(res) {
                     console.log(res);
                     if (res === 'prepare') {
-                        $( "#btnstart" ).replaceWith( '<span id="btnprepare" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Prepare</span>' );
+                        $( "#btnstart" ).replaceWith( '<span id="preparebtn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Prepare</span>' );
                     } else if (res === 'composer') {
-                        $( "#btnstart" ).replaceWith( '<span id="btncompose" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Install</span>' );
+                        $( "#btnstart" ).replaceWith( '<span id="composerbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Install</span>' );
                     } else if (res === 'cleanup') {
-                        $("#btnstart").replaceWith('<span id="btncleanup" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="btnbazaar" class="btn btn-lg" role="button">Install Bazaar</span>');
+                        $("#btnstart").replaceWith('<span id="cleanupbtn" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="btnbazaar" class="btn btn-lg" role="button">Install Bazaar</span>');
                     } else if (res === 'waiting') {
                         $("#btnstart").replaceWith('<h2 class="instal1">Still Downloading!</h2>');
                         poll(window.location.href);
@@ -283,53 +345,22 @@ if(isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"])){
                 });
         });
 
-        $(document).ready ( function () {
-            $(document).on ("click", "#btnprepare", function () {
-                $( "#btnprepare" ).replaceWith( '<h2 class="instal1">Please wait.</h2>' );
-                return $.ajax({
-                    url: window.location.href,
-                    data: {ajax: "prepare"},
-                    type: 'post'
-                })
-                    .done(function(res) {
-                        console.log(res);
-                        $( ".instal1" ).replaceWith( '<span id="btncompose" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Install</span>' );
-                    })
-                    .fail(function(err) {
-                        console.log('Error: ' + err.status);
-                        $( ".install" ).replaceWith( '<h2 class="instal1">Error:' + err.status + '</h2>' );
-                    });
-            });
+        //What happens on click Prepare
+        $(document).ready(function (){
+            phajax('post', 'prepare', 'Something went wrong', composerbtn, '#preparebtn', '', '');
         });
 
-        $(document).ready ( function () { $(document).on ("click", "#btncompose", function () {
-            $( "#btncompose" ).replaceWith( '<h2 class="instal1">Downloading. Please wait.</h2>' );
+        //On Click Composer
+        $(document).ready ( function () { $(document).on ("click", "#composerbtn", function () {
+            $( "#composerbtn" ).replaceWith( '<h2 class="instal1">Downloading. Please wait.</h2>' );
             poll(window.location.href);
             return $.post( window.location.href, { ajax: "composer"} );
         })
         });
-
-        $(document).ready ( function () {
-            $(document).on ("click", "#btncleanup", function () {
-                $( "#btncleanup" ).replaceWith( '<h2 class="instal1">Cleaning up - Redirecting Shortly</h2>' );
-                return $.ajax({
-                    url: window.location.href,
-                    data: {ajax: "cleanup"},
-                    type: 'post'
-                })
-                    .done(function(res) {
-                        console.log(res);
-                        window.setTimeout(function() {
-                            window.location.href = './';
-                        }, 5000);
-                    })
-                    .fail(function(err) {
-                        console.log('Error: ' + err.status);
-                        $( ".instal1" ).replaceWith( '<h2 class="instal1">Error:' + err.status + '</h2>' );
-                    });
-            });
+        //On Cleanup
+        $(document).ready(function (){
+            phajax('post', 'cleanup', 'Something went wrong', '<h2>Redirecting shortly</h2>', '#cleanupbtn', '', 'window.setTimeout(window.location.href = "./",5000);');
         });
-
     </script>
     </body>
     </html>
