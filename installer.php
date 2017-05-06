@@ -41,15 +41,21 @@ if ( !defined('ABSPATH') ) {
 $tmppath = (ABSPATH . 'temp/');
 if ( !file_exists($tmppath) ) {
     mkdir($tmppath);
+    touch($tmppath . 'install.log');
 }
 
 
 /**
- * phlog write log requests to temp/install.log
+ * phlog handles log requests and saves them to temp/install.log
+ * phlog($type, $message, $tmppath . 'install.log')
+ * @param $type
+ * @param $message
  */
-function phlog()
+function phlog($type, $message, $file)
 {
-
+    $logged = $type . ' ' . + $message + "\n";
+    file_put_contents($file, $logged, FILE_APPEND | LOCK_EX);
+    return true;
 }
 
 /**
@@ -86,6 +92,12 @@ function getfile($src, $dest)
         unset($phar);
     }
 
+    if (file_exists($dest)) {
+        phlog('getfile()', 'File downloaded', $tmppath . 'install.log');
+    }
+    else{
+        phlog('getfile()', 'Download Failed', $tmppath . 'install.log');
+    }
 
 }
 
@@ -110,6 +122,7 @@ function poststatus($temp, $path)
         $i = "cleanup";
     }
 
+    phlog('poststatus()', $i, $tmppath . 'install.log');
     echo $i;
 }
 
@@ -179,6 +192,12 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         }
         $composer = new Phar($tmppath . "composer.phar");
         $composer->extractTo($tmppath);
+        if(!file_exists($tmppath . 'vendor/autoload.php')){
+            phlog('Comcposer', 'Unpack Failed', $tmppath . 'install.log');
+        } else {
+            phlog('Comcposer', 'Unpacked', $tmppath . 'install.log');
+        }
+
         echo "Prepare: Completed";
     } elseif ( $_REQUEST["ajax"] == 'composer' ) {
         ignore_user_abort(true);
@@ -189,7 +208,10 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         echo "Request received. Composer started!";
         ob_flush();
 
+
+
         require_once($tmppath . 'vendor/autoload.php');
+        phlog('Composer:', 'Starting Create-Project', $tmppath . 'install.log');
         putenv('COMPOSER_HOME=' . $tmppath);
         putenv('COMPOSER_NO_INTERACTION=true');
         putenv('COMPOSER_PROCESS_TIMEOUT=300');
@@ -205,7 +227,16 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         $application->run($input);
         unset($input);
         unset($application);
-        touch($tmppath . 'compose.done');
+
+
+
+        if ( !file_exists($path . 'flarum/index.php')){
+            phlog('Composer:', 'Create-Project Failed', $tmppath . 'install.log');
+        } else {
+            phlog('Composer:', 'Create-Project Finished', $tmppath . 'install.log');
+            touch($tmppath . 'compose.done');
+        }
+
 
     } elseif ( $_REQUEST["ajax"] == 'cleanup' ) {
         rmove(ABSPATH . 'flarum', ABSPATH);
