@@ -89,6 +89,12 @@ function getfile($src, $dest)
 
 }
 
+/**
+ *
+ * Get installers current status.
+ * @param $temp
+ * @param $path
+ */
 function poststatus($temp, $path)
 {
     $i = "prepare";
@@ -177,6 +183,12 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
     } elseif ( $_REQUEST["ajax"] == 'composer' ) {
         ignore_user_abort(true);
         set_time_limit(500);
+
+        //Trying to force a 200 response, and rather let the status script decide if the install times out or not.
+        ob_end_flush();
+        echo "Request received. Composer started!";
+        ob_flush();
+
         require_once($tmppath . 'vendor/autoload.php');
         putenv('COMPOSER_HOME=' . $tmppath);
         putenv('COMPOSER_NO_INTERACTION=true');
@@ -339,7 +351,7 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
             $(document).on("click", "#composerbtn", function () {
                 $("#composerbtn").replaceWith('<h2 class="instal1">Downloading. Please wait.</h2>');
                 poll(window.location.href);
-                return $.post(window.location.href, {ajax: "composer"});
+                $.post(window.location.href, {ajax: "composer"});
             })
         });
         //On Cleanup
