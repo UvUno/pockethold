@@ -260,7 +260,7 @@ if(isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"])){
         //First - Lets set up some variables
         var timer;
         var count = 0;
-        var preparebrn = '<span id="preparebtn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Prepare</span>';
+        var preparebtn = '<span id="preparebtn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Prepare</span>';
         var cleanupbtn = '<span id="cleanupbtn" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="btnbazaar" class="btn btn-lg" role="button">Install Bazaar</span>';
         var composerbtn = '<span id="composerbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Install</span>';
 
@@ -301,7 +301,7 @@ if(isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"])){
                 })
                     .done(function(data) {
                         if (data === 'cleanup') {
-                            $(".instal1").replaceWith('<span id="btncleanup" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="btnbazaar" class="btn btn-lg" role="button">Install Bazaar</span>');
+                            $(".instal1").replaceWith(cleanupbtn);
                         }
                         else {
                             if (++count > 50) {
@@ -328,11 +328,11 @@ if(isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"])){
                 .done(function(res) {
                     console.log(res);
                     if (res === 'prepare') {
-                        $( "#btnstart" ).replaceWith( '<span id="preparebtn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Prepare</span>' );
+                        $( "#btnstart" ).replaceWith(preparebtn);
                     } else if (res === 'composer') {
-                        $( "#btnstart" ).replaceWith( '<span id="composerbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Install</span>' );
+                        $( "#btnstart" ).replaceWith(composerbtn);
                     } else if (res === 'cleanup') {
-                        $("#btnstart").replaceWith('<span id="cleanupbtn" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="btnbazaar" class="btn btn-lg" role="button">Install Bazaar</span>');
+                        $("#btnstart").replaceWith(cleanupbtn);
                     } else if (res === 'waiting') {
                         $("#btnstart").replaceWith('<h2 class="instal1">Still Downloading!</h2>');
                         poll(window.location.href);
