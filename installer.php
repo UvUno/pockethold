@@ -7,6 +7,7 @@
  * DISCLAIMER: THIS IS DIRTY. USE WITH CARE. SUGGESTIONS ARE WANTED. It was written as a
  */
 use Composer\Command\CreateProjectCommand;
+use Composer\Command\RequireCommand;
 use Composer\Console\Application;
 use Composer\IO\IOInterface;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -44,7 +45,6 @@ if ( !file_exists($tmppath) ) {
     touch($tmppath . 'install.log');
 }
 
-
 /**
  * phlog handles log requests and saves them to temp/install.log
  * phlog($type, $message, $tmppath . 'install.log')
@@ -53,7 +53,7 @@ if ( !file_exists($tmppath) ) {
  */
 function phlog($type, $message, $file)
 {
-    $logged = $type . ' ' . + $message + "\n";
+    $logged = $type . ' ' . $message . "\n";
     file_put_contents($file, $logged, FILE_APPEND | LOCK_EX);
     return true;
 }
@@ -77,7 +77,7 @@ function removeinstaller($temp)
  * @param $dest
  * @return bool
  */
-function getfile($src, $dest)
+function getfile($src, $dest, $tmppath)
 {
 
     if ( !file_put_contents($dest, fopen($src, 'r')) ) {
@@ -93,10 +93,10 @@ function getfile($src, $dest)
     }
 
     if (file_exists($dest)) {
-        phlog('getfile()', 'File downloaded', $tmppath . 'install.log');
+        phlog('getfile():', 'File downloaded', $tmppath . 'install.log');
     }
     else{
-        phlog('getfile()', 'Download Failed', $tmppath . 'install.log');
+        phlog('getfile():', 'Download Failed', $tmppath . 'install.log');
     }
 
 }
@@ -114,15 +114,20 @@ function poststatus($temp, $path)
     if ( file_exists($temp . 'vendor/autoload.php') ) {
         $i = "composer";
     }
-    if ( file_exists($path . 'flarum/index.php') && !file_exists($temp . 'compose.done') ) {
-        $i = "waiting";
+    if ( file_exists($temp . 'compose.start') ) {
+        $i = "waiting1";
     }
-
     if ( file_exists($temp . 'compose.done') ) {
-        $i = "cleanup";
+        $i = "cleanup1";
+    }
+    if ( file_exists($temp . 'bazaar.start') ) {
+        $i = "waiting2";
+    }
+    if ( file_exists($temp . 'bazaar.done') ) {
+        $i = "cleanup2";
     }
 
-    phlog('poststatus()', $i, $tmppath . 'install.log');
+    phlog('poststatus():', $i, $temp . 'install.log');
     echo $i;
 }
 
@@ -188,27 +193,21 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
     } elseif ( $_REQUEST["ajax"] == 'prepare' ) {
 
         if ( !file_exists($tmppath . 'composer.phar') ) {
-            getfile("https://getcomposer.org/composer.phar", $tmppath . 'composer.phar');
+            getfile("https://getcomposer.org/composer.phar", $tmppath . 'composer.phar', $tmppath);
         }
         $composer = new Phar($tmppath . "composer.phar");
         $composer->extractTo($tmppath);
         if(!file_exists($tmppath . 'vendor/autoload.php')){
-            phlog('Comcposer', 'Unpack Failed', $tmppath . 'install.log');
+            phlog('Composer:', 'Unpack Failed', $tmppath . 'install.log');
         } else {
-            phlog('Comcposer', 'Unpacked', $tmppath . 'install.log');
+            phlog('Composer:', 'Unpacked', $tmppath . 'install.log');
         }
 
         echo "Prepare: Completed";
     } elseif ( $_REQUEST["ajax"] == 'composer' ) {
+        touch($tmppath . 'compose.start');
         ignore_user_abort(true);
         set_time_limit(500);
-
-        //Trying to force a 200 response, and rather let the status script decide if the install times out or not.
-        ob_end_flush();
-        echo "Request received. Composer started!";
-        ob_flush();
-
-
 
         require_once($tmppath . 'vendor/autoload.php');
         phlog('Composer:', 'Starting Create-Project', $tmppath . 'install.log');
@@ -228,13 +227,49 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         unset($input);
         unset($application);
 
-
-
         if ( !file_exists($path . 'flarum/index.php')){
             phlog('Composer:', 'Create-Project Failed', $tmppath . 'install.log');
         } else {
             phlog('Composer:', 'Create-Project Finished', $tmppath . 'install.log');
             touch($tmppath . 'compose.done');
+        }
+
+
+    } elseif ( $_REQUEST["ajax"] == 'bazaar' ) {
+        touch($tmppath . 'bazaar.start');
+        phlog('Composer:', 'Prepareing Bazaar Install', $tmppath . 'install.log');
+        phlog('Composer:', 'Changing folder from ' . getcwd() . ' to', $tmppath . 'install.log');
+        chdir("flarum");
+        phlog('Composer:', getcwd() . ' - Should be /flarum', $tmppath . 'install.log');
+
+        ignore_user_abort(true);
+        set_time_limit(500);
+
+        require_once($tmppath . 'vendor/autoload.php');
+        phlog('Composer:', 'Starting Bazaar Install', $tmppath . 'install.log');
+        putenv('COMPOSER_HOME=' . $tmppath);
+        putenv('COMPOSER_NO_INTERACTION=true');
+        putenv('COMPOSER_PROCESS_TIMEOUT=300');
+        $application = new Application();
+        $application->setAutoExit(false);
+        $input = new ArrayInput([
+            'command' => 'config',
+            'github-oauth.github.com' => GITHUB_TOKEN
+        ]);
+        $application->run($input);
+        $application->setAutoExit(false);
+        $input = new StringInput('require flagrow/bazaar --no-dev');
+        $application->run($input);
+        unset($input);
+        unset($application);
+
+
+
+        if ( !file_exists(ABSPATH . 'flarum/index.php')){
+            phlog('Composer:', 'Require Bazaar Failed', $tmppath . 'install.log');
+        } else {
+            phlog('Composer:', 'Require Bazaar Finished', $tmppath . 'install.log');
+            touch($tmppath . 'bazaar.done');
         }
 
 
@@ -277,49 +312,61 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
     </div>
 
     <script>
-        //Javascript refactor pass 1. - Cleanup, comments and reusable code.
-
         /*
-         *
-         *
+         * Javascript refactor pass 2. - Cleanup more reusable code.
          * */
 
         //First - Lets set up some variables
+
         var timer;
         var count = 0;
         var preparebtn = '<span id="preparebtn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Prepare</span>';
-        var cleanupbtn = '<span id="cleanupbtn" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="btnbazaar" class="btn btn-lg" role="button">Install Bazaar</span>';
+        var bazaarbtn = '<span id ="cleanup1" ><span id="cleanupbtn" class="cleanup btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="bazaarbtn" class="btn btn-lg" role="button">Install Bazaar</span></span>';
+        var cleanupbtn = '<span id="cleanupbtn" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span>';
         var composerbtn = '<span id="composerbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Install</span>';
 
         // Functions
 
         // phajax function creates a reusable wrapper for common ajax calls. Shorting down codebase.
         function phajax(phtype, phdata, pherrm, phsuccess, phclick, phfailfunc, phsuccessfunc) {
-            $(document).on("click", phclick, function () {
-                return $.ajax({
-                    url: window.location.href,
-                    data: {ajax: phdata},
-                    type: phtype
-                })
-                    .done(function (res) {
-                        console.log(res);
-                        $(".instal1").replaceWith(phsuccess);
-                        if (phsuccessfunc) {
-                            eval(phsuccessfunc);
-                        }
-                    })
-                    .fail(function (err) {
-                        console.log('Error: ' + err.status);
-                        $(".install").replaceWith(pherrm);
-                        if (phfailfunc) {
-                            eval(phfailfunc);
-                        }
-                    })
-            });
-        };
 
+            $(document).ready(function () {
+
+
+                $(document).on("click", phclick, function () {
+                    $(phclick).replaceWith(phsuccess);
+
+                    return $.ajax({
+                        url: window.location.href,
+                        data: {ajax: phdata},
+                        type: phtype
+                    })
+
+
+                        .done(function (res) {
+                            console.log(res);
+                            $(".instal1").replaceWith(phsuccess);
+                            if (phsuccessfunc) {
+                                eval(phsuccessfunc);
+                            }
+                        })
+
+
+                        .fail(function (err) {
+                            console.log('Error: ' + err.status);
+                            $(".install").replaceWith(pherrm);
+                            if (phfailfunc) {
+                                eval(phfailfunc);
+                            }
+                        })
+
+                });
+
+            });
+
+        };
         //Status checker used during the composer install
-        function poll(url) {
+        function poll(url, equalname, replacewith1, replace) {
             timer = setTimeout(function () {
                 $.ajax({
                     url: url,
@@ -327,23 +374,25 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
                     type: 'get'
                 })
                     .done(function (data) {
-                        if (data === 'cleanup') {
-                            $(".instal1").replaceWith(cleanupbtn);
+                        if (data === equalname) {
+                            $(replace).replaceWith(replacewith1);
                         }
                         else {
                             if (++count > 50) {
-                                $(".instal1").replaceWith('<h2 class="instal1">Install failed :-(</h2>');
+                                $(replace).replaceWith('<h2 class="instal1">Install failed :-(</h2>');
                             }
 
                             else {
-                                $(".instal1").replaceWith('<h2 class="instal1">Still Downloading!</h2>');
-                                poll(url);
+                                $(replace).replaceWith('<h2 class="instal1">Still Downloading!</h2>');
+                                poll(url, equalname, replacewith1, replace);
                             }
                         }
 
                     })
             }, 5000)
         };
+
+        //Actual commands
 
         // Runs at startup.
         $(document).ready(function () {
@@ -358,12 +407,19 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
                         $("#btnstart").replaceWith(preparebtn);
                     } else if (res === 'composer') {
                         $("#btnstart").replaceWith(composerbtn);
-                    } else if (res === 'cleanup') {
+                    } else if (res === 'cleanup1') {
+                        $("#btnstart").replaceWith(bazaarbtn);
+                    } else if (res === 'cleanup2') {
                         $("#btnstart").replaceWith(cleanupbtn);
-                    } else if (res === 'waiting') {
-                        $("#btnstart").replaceWith('<h2 class="instal1">Still Downloading!</h2>');
-                        poll(window.location.href);
+                    } else if (res === 'waiting1') {
+                        $("#btnstart").replaceWith('<h2 class="instal1">Flarum is downloading!</h2>');
+                        poll(window.location.href, 'cleanup1', bazaarbtn, '.install1');
+
+                    } else if (res === 'waiting2') {
+                        $("#btnstart").replaceWith('<h2 class="instal1">Bazaar is being installed!</h2>');
+                        poll(window.location.href, 'cleanup2', cleanupbtn, '#cleanup1');
                     }
+
                 })
                 .fail(function (err) {
 
@@ -372,23 +428,23 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
                 });
         });
 
-        //What happens on click Prepare
-        $(document).ready(function () {
-            phajax('post', 'prepare', 'Something went wrong', composerbtn, '#preparebtn', '', '');
-        });
+        //On #preparebtn click
+        phajax('post', 'prepare', 'Something went wrong', composerbtn, '#preparebtn', '', '');
 
         //On Click Composer
         $(document).ready(function () {
             $(document).on("click", "#composerbtn", function () {
                 $("#composerbtn").replaceWith('<h2 class="instal1">Downloading. Please wait.</h2>');
-                poll(window.location.href);
+                poll(window.location.href, "cleanup1", bazaarbtn, '#cleanup1');
                 $.post(window.location.href, {ajax: "composer"});
             })
         });
+
         //On Cleanup
-        $(document).ready(function () {
-            phajax('post', 'cleanup', 'Something went wrong', '<h2>Redirecting shortly</h2>', '#cleanupbtn', '', 'window.setTimeout(window.location.href = "./",5000);');
-        });
+        phajax('post', 'cleanup', 'Something went wrong', '<h2>Redirecting shortly</h2>', '#cleanupbtn', '', 'window.setTimeout(window.location.href = "./",5000);');
+        //On Bazaar Install
+        phajax('post', 'bazaar', 'Something went wrong', '<h2>Installing Flagrows Bazaar</h2>', '#bazaarbtn', "", 'poll(window.location.href, "cleanup2", cleanupbtn, "");');
+
     </script>
     </body>
     </html>
