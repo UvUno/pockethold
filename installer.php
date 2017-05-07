@@ -258,7 +258,7 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         ]);
         $application->run($input);
         $application->setAutoExit(false);
-        $input = new StringInput('require flagrow/bazaar --no-dev');
+        $input = new StringInput('require flagrow/bazaar');
         $application->run($input);
         unset($input);
         unset($application);
