@@ -306,7 +306,7 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
                 <p style="max-width: 460px; margin:auto;">Pockethold is a 3rd party Flarum downloader.</p>
                 <p style="max-width: 460px; margin:auto;">The sole purpose is to provide a way to install Flarum without
                     shell.</p>
-                <p style="max-width: 460px; margin:50px auto auto auto;"><span id="btnstart">Checking Status</span></p>
+                <p style="max-width: 460px; margin:50px auto auto auto;"><span class="instal1">Checking Status</span></p>
             </div>
         </div>
     </div>
@@ -320,53 +320,20 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
 
         var timer;
         var count = 0;
-        var preparebtn = '<span id="preparebtn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Prepare</span>';
-        var bazaarbtn = '<span id ="cleanup1" ><span id="cleanupbtn" class="cleanup btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="bazaarbtn" class="btn btn-lg" role="button">Install Bazaar</span></span>';
-        var cleanupbtn = '<span id="cleanupbtn" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span>';
-        var composerbtn = '<span id="composerbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Install</span>';
+        var preparebtn = '<span class"instal1"><span id="preparebtn" class="btn btn-primary btn-lg" role="button">Step 1: Prepare</span></span>';
+        var bazaarbtn = '<span class"instal1"><span id="cleanupbtn" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="bazaarbtn" class="btn btn-lg" role="button">Install Bazaar</span></span>';
+        var cleanupbtn = '<span class"instal1"><span id="cleanupbtn" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span></span>';
+        var composerbtn = '<span class"instal1"><span id="composerbtn" class="btn btn-primary btn-lg" role="button">Step 2: Install</span></span>';
 
-        // Functions
-
-        // phajax function creates a reusable wrapper for common ajax calls. Shorting down codebase.
-        function phajax(phtype, phdata, pherrm, phsuccess, phclick, phfailfunc, phsuccessfunc) {
-
-            $(document).ready(function () {
-
-
-                $(document).on("click", phclick, function () {
-                    $(phclick).replaceWith(phsuccess);
-
-                    return $.ajax({
-                        url: window.location.href,
-                        data: {ajax: phdata},
-                        type: phtype
-                    })
-
-
-                        .done(function (res) {
-                            console.log(res);
-                            $(".instal1").replaceWith(phsuccess);
-                            if (phsuccessfunc) {
-                                eval(phsuccessfunc);
-                            }
-                        })
-
-
-                        .fail(function (err) {
-                            console.log('Error: ' + err.status);
-                            $(".install").replaceWith(pherrm);
-                            if (phfailfunc) {
-                                eval(phfailfunc);
-                            }
-                        })
-
-                });
-
-            });
-
-        };
-        //Status checker used during the composer install
-        function poll(url, equalname, replacewith1, replace) {
+        /*
+         //Status checker used during the composer install
+         // url = where to send ajax call
+         // equalname = what we are looking for
+         // replacewith1 = what .instal1 will be replaced by
+         // replace = if failed
+         // todo refine the function
+         */
+        function poll(url, equalname, replacewith1) {
             timer = setTimeout(function () {
                 $.ajax({
                     url: url,
@@ -375,21 +342,21 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
                 })
                     .done(function (data) {
                         if (data === equalname) {
-                            $(replace).replaceWith(replacewith1);
+                            $(".instal1").replaceWith(replacewith1);
                         }
                         else {
-                            if (++count > 50) {
-                                $(replace).replaceWith('<h2 class="instal1">Install failed :-(</h2>');
+                            if (++count > 30) {
+                                $(".instal1").replaceWith('<h2 class="instal1">Install failed :-(</h2>');
                             }
 
                             else {
-                                $(replace).replaceWith('<h2 class="instal1">Still Downloading!</h2>');
-                                poll(url, equalname, replacewith1, replace);
+                                $(".instal1").replaceWith('<h2 class="instal1">Still Working!</h2>');
+                                poll(url, equalname, replacewith1);
                             }
                         }
 
                     })
-            }, 5000)
+            }, 10000)
         };
 
         //Actual commands
@@ -399,25 +366,25 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
             $.ajax({
                 url: window.location.href,
                 data: {ajax: "status"},
-                type: 'post'
+                type: 'get'
             })
                 .done(function (res) {
                     console.log(res);
                     if (res === 'prepare') {
-                        $("#btnstart").replaceWith(preparebtn);
+                        $(".instal1").replaceWith(preparebtn);
                     } else if (res === 'composer') {
-                        $("#btnstart").replaceWith(composerbtn);
+                        $(".instal1").replaceWith(composerbtn);
                     } else if (res === 'cleanup1') {
-                        $("#btnstart").replaceWith(bazaarbtn);
+                        $(".instal1").replaceWith(bazaarbtn);
                     } else if (res === 'cleanup2') {
-                        $("#btnstart").replaceWith(cleanupbtn);
+                        $(".instal1").replaceWith(cleanupbtn);
                     } else if (res === 'waiting1') {
-                        $("#btnstart").replaceWith('<h2 class="instal1">Flarum is downloading!</h2>');
-                        poll(window.location.href, 'cleanup1', bazaarbtn, '.install1');
+                        $(".instal1").replaceWith('<h2 class="instal1">Flarum is downloading!</h2>');
+                        poll(window.location.href, 'cleanup1', bazaarbtn, ".instal1");
 
                     } else if (res === 'waiting2') {
-                        $("#btnstart").replaceWith('<h2 class="instal1">Bazaar is being installed!</h2>');
-                        poll(window.location.href, 'cleanup2', cleanupbtn, '#cleanup1');
+                        $(".instal1").replaceWith('<h2 class="instal1">Bazaar is being installed!</h2>');
+                        poll(window.location.href, "cleanup2", cleanupbtn, ".instal1");
                     }
 
                 })
@@ -429,21 +396,46 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         });
 
         //On #preparebtn click
-        phajax('post', 'prepare', 'Something went wrong', composerbtn, '#preparebtn', '', '');
+        $(document).ready(function () {
+            $(document).on("click", "#preparebtn", function () {
+                $(".instal1").replaceWith('<h2 class="instal1">Downloading and unpacking Composer</h2>');
+                poll(window.location.href, "composer", composerbtn);
+                $.post(window.location.href, {ajax: "prepare"});
+            })
+        });
 
         //On Click Composer
         $(document).ready(function () {
             $(document).on("click", "#composerbtn", function () {
-                $("#composerbtn").replaceWith('<h2 class="instal1">Downloading. Please wait.</h2>');
-                poll(window.location.href, "cleanup1", bazaarbtn, '#cleanup1');
-                $.post(window.location.href, {ajax: "composer"});
+                $(".instal1").replaceWith('<h2 class="instal1">Downloading. Please wait.</h2>');
+                poll(window.location.href, "cleanup1", bazaarbtn);
+                $.post(window.location.href, {ajax: "composer"}
+
+
+                );
+            })
+        });
+
+        //On Click Bazaar
+        $(document).ready(function () {
+            $(document).on("click", "#bazaarbtn", function () {
+                $(".instal1").replaceWith('<h2 class="instal1">Installing Flagrows Bazaar</h2>');
+                poll(window.location.href, "cleanup2", cleanupbtn);
+                $.post(window.location.href, {ajax: "bazaar"});
             })
         });
 
         //On Cleanup
-        phajax('post', 'cleanup', 'Something went wrong', '<h2>Redirecting shortly</h2>', '#cleanupbtn', '', 'window.setTimeout(window.location.href = "./",5000);');
-        //On Bazaar Install
-        phajax('post', 'bazaar', 'Something went wrong', '<h2>Installing Flagrows Bazaar</h2>', '#bazaarbtn', "", 'poll(window.location.href, "cleanup2", cleanupbtn, "");');
+        $(document).ready(function () {
+            $(document).on("click", "#cleanupbtn", function () {
+                $(".instal1").replaceWith('<h2 class="instal1">Moving and Deleting files - Please wait</h2>')
+                $.post(window.location.href, {ajax: "cleanup"})
+                .done(function() {
+                    window.setTimeout(window.location.href = "./",5000);
+                });
+            });
+
+        });
 
     </script>
     </body>
