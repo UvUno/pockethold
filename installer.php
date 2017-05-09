@@ -315,25 +315,17 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         /*
          * Javascript refactor pass 2. - Cleanup more reusable code.
          * */
-
         //First - Lets set up some variables
-
         var timer;
         var count = 0;
-        var preparebtn = '<span class"instal1"><span id="preparebtn" class="btn btn-primary btn-lg" role="button">Step 1: Prepare</span></span>';
-        var bazaarbtn = '<span class"instal1"><span id="cleanupbtn" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="bazaarbtn" class="btn btn-lg" role="button">Install Bazaar</span></span>';
-        var cleanupbtn = '<span class"instal1"><span id="cleanupbtn" class="btn btn-primary btn-lg" role="button">Step 3: Finish</span></span>';
-        var composerbtn = '<span class"instal1"><span id="composerbtn" class="btn btn-primary btn-lg" role="button">Step 2: Install</span></span>';
+        var dmsg = "<h2 class='instal1'>Please Wait</h2>";
+        var fmsg = "<h2 class='instal1'>Install failed</h2>";
+        var preparebtn = '<span class="instal1"><span id="preparebtn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Prepare</span></span>';
+        var composerbtn = '<span id="composerbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Install</span>';
+        var bazaarbtn = '<span class="instal1"><span id="cleanupbtn" class="cleanup btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="bazaarbtn" class="btn btn-lg" role="button">Install Bazaar</span></span>';
+        var cleanupbtn = '<span id="cleanupbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 3: Finish</span>';
 
-        /*
-         //Status checker used during the composer install
-         // url = where to send ajax call
-         // equalname = what we are looking for
-         // replacewith1 = what .instal1 will be replaced by
-         // replace = if failed
-         // todo refine the function
-         */
-        function poll(url, equalname, replacewith1) {
+        function poll(url, equalname, replacewith1, dmsg, fmsg) {
             timer = setTimeout(function () {
                 $.ajax({
                     url: url,
@@ -343,24 +335,22 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
                     .done(function (data) {
                         if (data === equalname) {
                             $(".instal1").replaceWith(replacewith1);
+                            count = 0;
                         }
                         else {
-                            if (++count > 30) {
-                                $(".instal1").replaceWith('<h2 class="instal1">Install failed :-(</h2>');
+                            if (++count > 50) {
+                                $(".instal1").replaceWith(fmsg);
                             }
-
                             else {
-                                $(".instal1").replaceWith('<h2 class="instal1">Still Working!</h2>');
-                                poll(url, equalname, replacewith1);
+                                $(".instal1").replaceWith(dmsg);
+                                poll(url, equalname, replacewith1, dmsg, fmsg);
+
                             }
                         }
-
                     })
-            }, 10000)
+            }, 5000)
         };
-
         //Actual commands
-
         // Runs at startup.
         $(document).ready(function () {
             $.ajax({
@@ -380,63 +370,52 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
                         $(".instal1").replaceWith(cleanupbtn);
                     } else if (res === 'waiting1') {
                         $(".instal1").replaceWith('<h2 class="instal1">Flarum is downloading!</h2>');
-                        poll(window.location.href, 'cleanup1', bazaarbtn, ".instal1");
-
+                        poll(window.location.href, 'cleanup1', bazaarbtn, dmsg, '');
                     } else if (res === 'waiting2') {
                         $(".instal1").replaceWith('<h2 class="instal1">Bazaar is being installed!</h2>');
-                        poll(window.location.href, "cleanup2", cleanupbtn, ".instal1");
+                        poll(window.location.href, 'cleanup2', cleanupbtn, dmsg, '');
                     }
-
                 })
                 .fail(function (err) {
-
                     console.log('Error: ' + err.status);
                     $(".install").replaceWith('<h2 class="instal1">Error:' + err.status + '</h2>');
                 });
         });
 
-        //On #preparebtn click
+        //On Click Prepare
         $(document).ready(function () {
             $(document).on("click", "#preparebtn", function () {
-                $(".instal1").replaceWith('<h2 class="instal1">Downloading and unpacking Composer</h2>');
-                poll(window.location.href, "composer", composerbtn);
-                $.post(window.location.href, {ajax: "prepare"});
+                $(".instal1").replaceWith('<h2 class="instal1">Getting Composer - Please wait</h2>');
+                poll(window.location.href, "composer", composerbtn, dmsg, '');
+                return $.post(window.location.href, {ajax: "prepare"});
             })
         });
-
         //On Click Composer
         $(document).ready(function () {
             $(document).on("click", "#composerbtn", function () {
-                $(".instal1").replaceWith('<h2 class="instal1">Downloading. Please wait.</h2>');
-                poll(window.location.href, "cleanup1", bazaarbtn);
-                $.post(window.location.href, {ajax: "composer"}
-
-
-                );
+                $(".instal1").replaceWith('<h2 class="instal1">Downlading Flarum - Please Wait</h2>');
+                poll(window.location.href, "cleanup1", bazaarbtn, dmsg, '');
+                return $.post(window.location.href, {ajax: "composer"});
             })
         });
-
         //On Click Bazaar
         $(document).ready(function () {
             $(document).on("click", "#bazaarbtn", function () {
-                $(".instal1").replaceWith('<h2 class="instal1">Installing Flagrows Bazaar</h2>');
-                poll(window.location.href, "cleanup2", cleanupbtn);
-                $.post(window.location.href, {ajax: "bazaar"});
+                $(".instal1").replaceWith('<h2 class="instal1">Installing Bazaar</h2>' );
+                poll(window.location.href, 'cleanup2', cleanupbtn, dmsg, '');
+                return $.post(window.location.href, {ajax: "bazaar"});
             })
         });
-
-        //On Cleanup
+        //On Click Composer
         $(document).ready(function () {
             $(document).on("click", "#cleanupbtn", function () {
-                $(".instal1").replaceWith('<h2 class="instal1">Moving and Deleting files - Please wait</h2>')
-                $.post(window.location.href, {ajax: "cleanup"})
-                .done(function() {
-                    window.setTimeout(window.location.href = "./",5000);
-                });
-            });
-
+                $(".instal1").replaceWith('<h2 class="instal1">Cleaning up temp and moving files. </h2>');
+                return $.post(window.location.href, {ajax: "cleanup"})
+                    .done(function() {
+                        window.setTimeout(window.location.href = "./",10000);
+                    });
+            })
         });
-
     </script>
     </body>
     </html>
