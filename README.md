@@ -1,4 +1,4 @@
-<img alt="Pockethold" src="//i.imgur.com/k5tMKCG.png">
+<img alt="Pockethold" src="https//i.imgur.com/k5tMKCG.png">
 
 
 # The first webinstaller for Flarum(?)
