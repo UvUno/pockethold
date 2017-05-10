@@ -4,7 +4,9 @@
  * Downloads composer, runs create-project flarum/flarum and remove itself.
  * Author: Andre Herberth
  * License: MIT
- * DISCLAIMER: THIS IS DIRTY. USE WITH CARE. SUGGESTIONS ARE WANTED. It was written as a
+ * DISCLAIMER: THIS IS DIRTY. USE WITH CARE.
+ * Credits: Luceos for his advice, and some good code.
+ *          ibrahimk157 for listening to my rants, and testing my very unstable code.
  */
 use Composer\Command\CreateProjectCommand;
 use Composer\Command\RequireCommand;
@@ -16,24 +18,7 @@ use Symfony\Component\Console\Output\BufferedOutput;
 
 //Set error reporting
 error_reporting(E_ALL);
-
-//Attempt at fixing Github - Need a new one, as this one is the same Lucious used in his concept.
 const GITHUB_TOKEN = 'ec785da935d5535e151f7b3386190265f00e8fe2';
-
-//Increase Memory Limit. First attempt at setting 1G. If this fails, check if memory is 512 or more. Die if not.
-$ini_get_option_details = ini_get_all();
-if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
-    ini_set('memory_limit', '1G');
-    //  phlog('Memory: Attempte to set 1GB Memory Limit. ');
-    //  phlog('Memory: Set to' . ini_get['memory_limit'] );
-}
-if ( $ini_get_option_details['memory_limit'] >= '512M' ) {
-    // phlog('Memory: ' . ini_get['memory_limit'] );
-} else {
-    //  phlog('Memory: Not enough memory. Memory set at: ' .ini_get['memory_limit'] );
-    die();
-}
-
 
 //Then check if this was allowed.
 if ( !defined('ABSPATH') ) {
@@ -44,6 +29,18 @@ if ( !file_exists($tmppath) ) {
     mkdir($tmppath);
     touch($tmppath . 'install.log');
 }
+
+//Increase Memory Limit. First attempt at setting 1G. Die if not.
+$ini_get_option_details = ini_get_all();
+if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
+    ini_set('memory_limit', '512M');
+    phlog('Memory:', 'Attempting to set 512M Memory Limit.', $tmppath . 'install.log');
+} else {
+
+    phlog('Memory: ', 'Can not change memory', $tmppath . 'install.log');
+    die("Not enough memory!");
+}
+
 
 /**
  * phlog handles log requests and saves them to temp/install.log
@@ -380,6 +377,8 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
                     console.log('Error: ' + err.status);
                     $(".install").replaceWith('<h2 class="instal1">Error:' + err.status + '</h2>');
                 });
+
+
         });
 
         //On Click Prepare
