@@ -227,7 +227,7 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         unset($input);
         unset($application);
 
-        if ( !file_exists($path . 'flarum/index.php')){
+        if ( !file_exists(ABSPATH . 'flarum/index.php')){
             phlog('Composer:', 'Create-Project Failed', $tmppath . 'install.log');
         } else {
             phlog('Composer:', 'Create-Project Finished', $tmppath . 'install.log');
