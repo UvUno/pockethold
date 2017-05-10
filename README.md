@@ -1,12 +1,13 @@
-<img alt="Pockethold" src="http://i.imgur.com/efZ8vHn.png">
+<img alt="Pockethold" src="//i.imgur.com/k5tMKCG.png">
 
 
 # The first webinstaller for Flarum(?)
-* Downloads Composer, and prepare Flarum for installation.  
+* Downloads Composer, and prepares Flarum for installation.  
 
 Requirements.
 1. cUrl or allow_url_fopen = true
-2. PHP Memory limit at least 512M 
+2. PHP Memory limit at least 512M
+3. Rougly 3 - 5 minutes of your time. 
 
 Usage:
 Upload installer.php where you want Flarum to be installed. 
