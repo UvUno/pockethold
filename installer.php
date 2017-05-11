@@ -31,19 +31,6 @@ if ( !file_exists($tmppath) ) {
     touch($tmppath . 'composer.log');
 }
 
-//Increase Memory Limit.
-//TODO: Needs to check if value is set correctly. Currently only setting 512M.
-$ini_get_option_details = ini_get_all();
-if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
-    ini_set('memory_limit', '512M');
-    phlog('Memory:', 'Attempting to set 512M Memory Limit.', $tmppath . 'install.log');
-} else {
-
-    phlog('Memory: ', 'Can not change memory', $tmppath . 'install.log');
-    die("Not enough memory!");
-}
-
-
 /**
  * phlog handles log requests and saves them to temp/install.log
  * phlog($type, $message, $tmppath . 'install.log')
@@ -208,6 +195,22 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
 
         echo "Prepare: Completed";
     } elseif ( $_REQUEST["ajax"] == 'composer' ) {
+
+
+        //Increase Memory Limit.
+        //TODO: Needs to check if value is set correctly. Currently only setting 512M.
+        $ini_get_option_details = ini_get_all();
+        if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
+            ini_set('memory_limit', '512M');
+            phlog('Memory:', 'Attempting to set 512M Memory Limit.', $tmppath . 'install.log');
+        } else {
+
+            phlog('Memory: ', 'Can not change memory', $tmppath . 'install.log');
+            die("Not enough memory!");
+        }
+
+
+
         touch($tmppath . 'compose.start');
         ignore_user_abort(true);
         set_time_limit(500);
@@ -247,6 +250,20 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
 
 
     } elseif ( $_REQUEST["ajax"] == 'bazaar' ) {
+
+        //Increase Memory Limit.
+        //TODO: Needs to check if value is set correctly. Currently only setting 512M.
+        $ini_get_option_details = ini_get_all();
+        if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
+            ini_set('memory_limit', '512M');
+            phlog('Memory:', 'Attempting to set 512M Memory Limit.', $tmppath . 'install.log');
+        } else {
+
+            phlog('Memory: ', 'Can not change memory', $tmppath . 'install.log');
+            die("Not enough memory!");
+        }
+
+
         touch($tmppath . 'bazaar.start');
         phlog('Composer:', 'Prepareing Bazaar Install', $tmppath . 'install.log');
         phlog('Composer:', 'Changing folder from ' . getcwd() . ' to', $tmppath . 'install.log');
