@@ -14,7 +14,7 @@ use Composer\Console\Application;
 use Composer\IO\IOInterface;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\StringInput;
-use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Output\StreamOutput;
 
 //Set error reporting
 error_reporting(E_ALL);
@@ -28,9 +28,11 @@ $tmppath = (ABSPATH . 'temp/');
 if ( !file_exists($tmppath) ) {
     mkdir($tmppath);
     touch($tmppath . 'install.log');
+    touch($tmppath . 'composer.log');
 }
 
-//Increase Memory Limit. First attempt at setting 1G. Die if not.
+//Increase Memory Limit.
+//TODO: Needs to check if value is set correctly. Currently only setting 512M.
 $ini_get_option_details = ini_get_all();
 if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
     ini_set('memory_limit', '512M');
@@ -50,7 +52,11 @@ if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
  */
 function phlog($type, $message, $file)
 {
-    $logged = $type . ' ' . $message . "\n";
+    //Get timestamp
+    $logtime = date("D M j G:i:s");
+    //combine message
+    $logged = $logtime . ': ' . $type . ' ' . $message . "\n";
+    //Insert into Log
     file_put_contents($file, $logged, FILE_APPEND | LOCK_EX);
     return true;
 }
@@ -211,16 +217,24 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         putenv('COMPOSER_HOME=' . $tmppath);
         putenv('COMPOSER_NO_INTERACTION=true');
         putenv('COMPOSER_PROCESS_TIMEOUT=300');
+
         $application = new Application();
         $application->setAutoExit(false);
         $input = new ArrayInput([
             'command' => 'config',
             'github-oauth.github.com' => GITHUB_TOKEN
         ]);
+
+
+
         $application->run($input);
         $application->setAutoExit(false);
-        $input = new StringInput('create-project flarum/flarum ./flarum --stability=beta --no-dev --ignore-platform-reqs');
-        $application->run($input);
+        $input = new StringInput('create-project flarum/flarum ./flarum --stability=beta --no-progress --no-dev --ignore-platform-reqs');
+
+        // Trying to output
+        $output = new StreamOutput(fopen($tmppath . 'composer.log', 'a', false));
+
+        $application->run($input, $output);
         unset($input);
         unset($application);
 
@@ -259,8 +273,6 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         $application->run($input);
         unset($input);
         unset($application);
-
-
 
         if ( !file_exists(ABSPATH . 'flarum/index.php')){
             phlog('Composer:', 'Require Bazaar Failed', $tmppath . 'install.log');
