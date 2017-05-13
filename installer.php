@@ -20,16 +20,16 @@ use Symfony\Component\Console\Output\StreamOutput;
 error_reporting(E_ALL);
 const GITHUB_TOKEN = 'ec785da935d5535e151f7b3386190265f00e8fe2';
 
-//Then check if this was allowed.
 if ( !defined('ABSPATH') ) {
     define('ABSPATH', dirname(__FILE__) . '/');
 }
 $tmppath = (ABSPATH . 'temp/');
 if ( !file_exists($tmppath) ) {
     mkdir($tmppath);
-    touch($tmppath . 'install.log');
-    touch($tmppath . 'composer.log');
 }
+touch($tmppath . 'install.log');
+touch($tmppath . 'composer.log');
+
 
 /**
  * phlog handles log requests and saves them to temp/install.log
@@ -46,6 +46,27 @@ function phlog($type, $message, $file)
     //Insert into Log
     file_put_contents($file, $logged, FILE_APPEND | LOCK_EX);
     return true;
+}
+
+/**
+ * Count lines of file.
+ * @param $file
+ * @return int
+ */
+function phgetlines ($file)
+{
+    $lines = 0;
+    $file = fopen( $file, 'r');
+
+    while( !feof( $file) ) {
+
+        fgets($file);
+
+        $lines++;
+    }
+
+    fclose( $file);
+    return $lines;
 }
 
 /**
@@ -213,13 +234,13 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
 
         touch($tmppath . 'compose.start');
         ignore_user_abort(true);
-        set_time_limit(500);
+        set_time_limit(1100);
 
         require_once($tmppath . 'vendor/autoload.php');
         phlog('Composer:', 'Starting Create-Project', $tmppath . 'install.log');
         putenv('COMPOSER_HOME=' . $tmppath);
         putenv('COMPOSER_NO_INTERACTION=true');
-        putenv('COMPOSER_PROCESS_TIMEOUT=300');
+        putenv('COMPOSER_PROCESS_TIMEOUT=1000');
 
         $application = new Application();
         $application->setAutoExit(false);
@@ -303,6 +324,18 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         rmove(ABSPATH . 'flarum', ABSPATH);
         removeinstaller($tmppath);
         echo "Complete";
+    } elseif ( $_REQUEST["ajax"] == 'progress' ) {
+
+        if(file_exists($tmppath . 'composer.log')) {
+            $linecount = phgetlines($tmppath . 'composer.log');
+            phlog('Progress: ', 'Create-Project currently at ' . $linecount .  'out of 88', $tmppath . 'install.log');
+            echo $linecount;
+        } else {
+
+            echo "";
+
+        }
+
     } else {
         die("Access denied!");
     }
@@ -332,7 +365,9 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
                 <p style="max-width: 460px; margin:auto;">Pockethold is a 3rd party Flarum downloader.</p>
                 <p style="max-width: 460px; margin:auto;">The sole purpose is to provide a way to install Flarum without
                     shell.</p>
+
                 <p style="max-width: 460px; margin:50px auto auto auto;"><span class="instal1">Checking Status</span></p>
+                <div id="progressdiv"></div>
             </div>
         </div>
     </div>
@@ -361,13 +396,21 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
                     .done(function (data) {
                         if (data === equalname) {
                             $(".instal1").replaceWith(replacewith1);
+                            $("#progressdiv").replaceWith('<div id="progressdiv"></div>');
                             count = 0;
+                            if (data === 'waiting1') {
+                                prog(url);
+                            }
                         }
                         else {
-                            if (++count > 50) {
+                            if (++count > 110) {
                                 $(".instal1").replaceWith(fmsg);
+                                $("#progressdiv").replaceWith('<div id="progressdiv">Timed out, or failed. Check logs.</div>');
                             }
                             else {
+                                if (data === 'waiting1') {
+                                    prog(url);
+                                }
                                 $(".instal1").replaceWith(dmsg);
                                 poll(url, equalname, replacewith1, dmsg, fmsg);
 
@@ -376,6 +419,21 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
                     })
             }, 5000)
         };
+
+        function prog(url) {
+            $.ajax({
+                url: url,
+                data: {ajax: "progress"},
+                type: 'get'
+            })
+                .done(function(result) {
+                    $("#progressdiv").replaceWith('<div id="progressdiv">Progress: ' + result + ' out of 87</div>');
+
+                }).fail(function() {
+            });
+        };
+
+
         //Actual commands
         // Runs at startup.
         $(document).ready(function () {
