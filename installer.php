@@ -226,8 +226,8 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         //TODO: Needs to check if value is set correctly. Currently only setting 512M.
         $ini_get_option_details = ini_get_all();
         if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
-            ini_set('memory_limit', '512M');
-            phlog('Memory:', 'Attempting to set 512M Memory Limit.', $tmppath . 'install.log');
+            ini_set('memory_limit', '1G');
+            phlog('Memory:', 'Attempting to set 1G Memory Limit.', $tmppath . 'install.log');
         } else {
 
             phlog('Memory: ', 'Can not change memory', $tmppath . 'install.log');
