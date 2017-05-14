@@ -69,18 +69,6 @@ function phgetlines ($file)
 }
 
 /**
- * Removes installer, temp and redirects to ./ to start forum install.
- *
- * @param $temp -
- */
-function removeinstaller($temp)
-{
-    rrmdir($temp);
-    unlink(__FILE__);
-
-}
-
-/**
  * getfile($src, $dest) - downloads a file and saves it on the web server.
  *
  * @param $src
@@ -220,9 +208,6 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
     }
     elseif ( $_REQUEST["ajax"] == 'composer' )
     {
-
-
-        //Increase Memory Limit.
         //TODO: Needs to check if value is set correctly. Currently only setting 512M.
         $ini_get_option_details = ini_get_all();
         if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
@@ -325,7 +310,11 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
     elseif ( $_REQUEST["ajax"] == 'cleanup' )
     {
         rmove(ABSPATH . 'flarum', ABSPATH);
-        removeinstaller($tmppath);
+
+        //Removes temporary directory
+        rrmdir($tmppath);
+       //Removes installer.php
+        unlink(__FILE__);
         echo "Complete";
     }
     elseif ( $_REQUEST["ajax"] == 'progress' )
