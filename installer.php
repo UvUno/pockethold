@@ -15,21 +15,20 @@ use Composer\IO\IOInterface;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\StringInput;
 use Symfony\Component\Console\Output\StreamOutput;
-
 //Set error reporting
 error_reporting(E_ALL);
 const GITHUB_TOKEN = 'ec785da935d5535e151f7b3386190265f00e8fe2';
-
-if ( !defined('ABSPATH') ) {
+if ( !defined('ABSPATH') )
+{
     define('ABSPATH', dirname(__FILE__) . '/');
 }
 $tmppath = (ABSPATH . 'temp/');
-if ( !file_exists($tmppath) ) {
+if ( !file_exists($tmppath) )
+{
     mkdir($tmppath);
 }
 touch($tmppath . 'install.log');
 touch($tmppath . 'composer.log');
-
 
 /**
  * phlog handles log requests and saves them to temp/install.log
@@ -199,9 +198,12 @@ function rmove($src, $dest)
 
 if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
 
-    if ( $_REQUEST["ajax"] == 'status' ) {
+    if ( $_REQUEST["ajax"] == 'status' )
+    {
         poststatus($tmppath, ABSPATH);
-    } elseif ( $_REQUEST["ajax"] == 'prepare' ) {
+    }
+    elseif ( $_REQUEST["ajax"] == 'prepare' )
+    {
 
         if ( !file_exists($tmppath . 'composer.phar') ) {
             getfile("https://getcomposer.org/composer.phar", $tmppath . 'composer.phar', $tmppath);
@@ -215,7 +217,9 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         }
 
         echo "Prepare: Completed";
-    } elseif ( $_REQUEST["ajax"] == 'composer' ) {
+    }
+    elseif ( $_REQUEST["ajax"] == 'composer' )
+    {
 
 
         //Increase Memory Limit.
@@ -229,8 +233,6 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
             phlog('Memory: ', 'Can not change memory', $tmppath . 'install.log');
             die("Not enough memory!");
         }
-
-
 
         touch($tmppath . 'compose.start');
         ignore_user_abort(true);
@@ -248,9 +250,6 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
             'command' => 'config',
             'github-oauth.github.com' => GITHUB_TOKEN
         ]);
-
-
-
         $application->run($input);
         $application->setAutoExit(false);
         $input = new StringInput('create-project flarum/flarum ./flarum --stability=beta --no-progress --no-dev --ignore-platform-reqs');
@@ -270,7 +269,9 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         }
 
 
-    } elseif ( $_REQUEST["ajax"] == 'bazaar' ) {
+    }
+    elseif ( $_REQUEST["ajax"] == 'bazaar' )
+    {
 
         //Increase Memory Limit.
         //TODO: Needs to check if value is set correctly. Currently only setting 512M.
@@ -320,11 +321,15 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         }
 
 
-    } elseif ( $_REQUEST["ajax"] == 'cleanup' ) {
+    }
+    elseif ( $_REQUEST["ajax"] == 'cleanup' )
+    {
         rmove(ABSPATH . 'flarum', ABSPATH);
         removeinstaller($tmppath);
         echo "Complete";
-    } elseif ( $_REQUEST["ajax"] == 'progress' ) {
+    }
+    elseif ( $_REQUEST["ajax"] == 'progress' )
+    {
 
         if(file_exists($tmppath . 'composer.log')) {
             $linecount = phgetlines($tmppath . 'composer.log');
@@ -336,12 +341,16 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
 
         }
 
-    } else {
+    }
+    else
+    {
         die("Access denied!");
     }
 
 
-} else {
+}
+else
+{
     ?>
     <!DOCTYPE html>
     <html lang="en">
@@ -417,7 +426,7 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
                             }
                         }
                     })
-            }, 5000)
+            }, 10000)
         };
 
         function prog(url) {
@@ -471,7 +480,7 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         //On Click Prepare
         $(document).ready(function () {
             $(document).on("click", "#preparebtn", function () {
-                $(".instal1").replaceWith('<h2 class="instal1">Getting Composer - Please wait</h2>');
+                $(".instal1").replaceWith('<h2 class="instal1">Downloading Composer</h2>');
                 poll(window.location.href, "composer", composerbtn, dmsg, '');
                 return $.post(window.location.href, {ajax: "prepare"});
             })
@@ -479,7 +488,7 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         //On Click Composer
         $(document).ready(function () {
             $(document).on("click", "#composerbtn", function () {
-                $(".instal1").replaceWith('<h2 class="instal1">Downlading Flarum - Please Wait</h2>');
+                $(".instal1").replaceWith('<h2 class="instal1">Downlading Flarum</h2>');
                 poll(window.location.href, "cleanup1", bazaarbtn, dmsg, '');
                 return $.post(window.location.href, {ajax: "composer"});
             })
@@ -495,7 +504,7 @@ if ( isset($_REQUEST["ajax"]) && !empty($_REQUEST["ajax"]) ) {
         //On Click Composer
         $(document).ready(function () {
             $(document).on("click", "#cleanupbtn", function () {
-                $(".instal1").replaceWith('<h2 class="instal1">Cleaning up temp and moving files. </h2>');
+                $(".instal1").replaceWith('<h2 class="instal1">Removing Installer</h2>');
                 return $.post(window.location.href, {ajax: "cleanup"})
                     .done(function() {
                         window.setTimeout(window.location.href = "./",10000);
