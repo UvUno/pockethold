@@ -6,7 +6,7 @@
 
 Requirements.
 1. cUrl or allow_url_fopen = true
-2. PHP Memory limit at least 512M
+2. PHP Memory limit at least 512M (Increase to 1GB if installing with [bazaar](https://github.com/flagrow/bazaar)!)
 3. Rougly 3 - 5 minutes of your time. 
 
 Usage:
