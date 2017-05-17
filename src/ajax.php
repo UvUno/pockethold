@@ -35,18 +35,20 @@ if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
 
     }elseif($_REQUEST['ajax'] == 'cleanup'){
 
-        $pockethold->rmove($pockethold->tpath . 'flarum', $pockethold->ipath);
-
+        $pockethold->rmove($pockethold->ipath . 'flarum', $pockethold->ipath);
         //Removes temporary directory
-        rrmdir($pockethold->ipath);
+        $pockethold->rrmdir($pockethold->tpath);
         //Removes installer.php
+
+        // TODO: Prepare on compile time
         // unlink(__FILE__);
         echo "Complete";
 
-    }elseif($_REQUEST[''] == 'progress'){
-
-        $pockethold->phlines($pockethold->tpath . 'composer.log');
-
+    }elseif($_REQUEST['ajax'] == 'progress'){
+        $pockethold->phlog('Status: ', $tmppath, 'install.log');
+        $linecount = $pockethold->phlines($tmppath . 'composer.log');
+        $pockethold->phlog('Status: ', "composer.log is currently $linecount long", 'install.log');
+        echo $linecount;
     } else {
         die();
     }
