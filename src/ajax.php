@@ -35,7 +35,9 @@ if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
 
     }elseif($_REQUEST['ajax'] == 'cleanup'){
 
-        $pockethold->rmove($pockethold->ipath . 'flarum', $pockethold->ipath);
+        $pockethold->rmove($pockethold->ipath . "flarum", $pockethold->ipath);
+
+
         //Removes temporary directory
         $pockethold->rrmdir($pockethold->tpath);
         //Removes installer.php
