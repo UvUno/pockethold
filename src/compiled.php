@@ -205,58 +205,58 @@ if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
 
     }
 
-    if ( !defined('ABSPATH') )
-    {
-        define('ABSPATH', dirname(__FILE__) . '/');
-    }
-    $tmppath = (ABSPATH . 'temp/');
+if ( !defined('ABSPATH') )
+{
+define('ABSPATH', dirname(__FILE__) . '/');
+}
+$tmppath = (ABSPATH . 'temp/');
 
-    $pockethold = new pockethold(ABSPATH, $tmppath);
+$pockethold = new pockethold(ABSPATH, $tmppath);
 
-    if($_REQUEST['ajax'] == 'status'){
+if($_REQUEST['ajax'] == 'status'){
 
-        $status = $pockethold->phstatus();
-        $pockethold->phlog('Status: ', $status, 'install.log');
-        echo $status;
+$status = $pockethold->phstatus();
+$pockethold->phlog('Status: ', $status, 'install.log');
+echo $status;
 
-    }elseif($_REQUEST['ajax'] == 'prepare'){
+}elseif($_REQUEST['ajax'] == 'prepare'){
 
-        $pockethold->prepare();
-        $pockethold->phlog('Status: ', 'Composer is Unpacked', 'install.log');
+$pockethold->prepare();
+$pockethold->phlog('Status: ', 'Composer is Unpacked', 'install.log');
 
-    }elseif($_REQUEST['ajax'] == 'composer'){
-        touch($pockethold->tpath . 'composer.log');
-        touch($pockethold->tpath . 'compose.start');
-        $pockethold->phcomposer('create-project flarum/flarum ./flarumtemp --stability=beta --no-progress --no-dev --ignore-platform-reqs');
-        touch($pockethold->tpath . 'compose.done');
-    }elseif($_REQUEST['ajax'] == "bazaar" ){
-        touch($pockethold->tpath . 'bazaar.start');
-        chdir("flarumtemp");
-        $pockethold->phcomposer('require flagrow/bazaar');
-        touch($pockethold->tpath . 'bazaar.done');
+}elseif($_REQUEST['ajax'] == 'composer'){
+touch($pockethold->tpath . 'composer.log');
+touch($pockethold->tpath . 'compose.start');
+$pockethold->phcomposer('create-project flarum/flarum ./flarumtemp --stability=beta --no-progress --no-dev --ignore-platform-reqs');
+touch($pockethold->tpath . 'compose.done');
+}elseif($_REQUEST['ajax'] == "bazaar" ){
+touch($pockethold->tpath . 'bazaar.start');
+chdir("flarumtemp");
+$pockethold->phcomposer('require flagrow/bazaar');
+touch($pockethold->tpath . 'bazaar.done');
 
-    }elseif($_REQUEST['ajax'] == 'cleanup'){
+}elseif($_REQUEST['ajax'] == 'cleanup'){
 
-        $pockethold->rmove($pockethold->ipath . "flarumtemp", $pockethold->ipath);
+$pockethold->rmove($pockethold->ipath . "flarumtemp", $pockethold->ipath);
 
 //Removes temporary directory
-        $pockethold->rrmdir($pockethold->tpath);
+$pockethold->rrmdir($pockethold->tpath);
 //Removes installer.php
-        unlink(__FILE__);
-        echo "Complete";
+unlink(__FILE__);
+echo "Complete";
 
-    }elseif($_REQUEST['ajax'] == 'progress'){
-        $pockethold->phlog('Status: ', $tmppath, 'install.log');
-        $linecount = $pockethold->phlines($tmppath . 'composer.log');
-        $pockethold->phlog('Status: ', "composer.log is currently $linecount long", 'install.log');
-        echo $linecount;
-    } else {
-        die();
-    }
+}elseif($_REQUEST['ajax'] == 'progress'){
+$pockethold->phlog('Status: ', $tmppath, 'install.log');
+$linecount = $pockethold->phlines($tmppath . 'composer.log');
+$pockethold->phlog('Status: ', "composer.log is currently $linecount long", 'install.log');
+echo $linecount;
+} else {
+die();
+}
 
 }
 else {
-    ?>
+?>
 
     <!DOCTYPE html>
     <html lang="en">
@@ -266,9 +266,9 @@ else {
               integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
               crossorigin="anonymous">
         <script
-                src="https://code.jquery.com/jquery-3.2.1.min.js"
-                integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
-                crossorigin="anonymous"></script>
+            src="https://code.jquery.com/jquery-3.2.1.min.js"
+            integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+            crossorigin="anonymous"></script>
     </head>
     <body>
     <div class="container">
@@ -423,5 +423,5 @@ else {
     </body>
     </html>
 
-    <?php
+<?php
 }

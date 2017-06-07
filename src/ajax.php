@@ -23,13 +23,14 @@ if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
         $pockethold->prepare();
         $pockethold->phlog('Status: ', 'Composer is Unpacked', 'install.log');
 
-    }elseif($_REQUEST['ajax'] == 'composer'){
+    elseif($_REQUEST['ajax'] == 'composer'){
         touch($pockethold->tpath . 'composer.log');
         touch($pockethold->tpath . 'compose.start');
-        $pockethold->phcomposer('create-project flarum/flarum ./flarum --stability=beta --no-progress --no-dev --ignore-platform-reqs');
+        $pockethold->phcomposer('create-project flarum/flarum ./flarumtemp --stability=beta --no-progress --no-dev --ignore-platform-reqs');
         touch($pockethold->tpath . 'compose.done');
     }elseif($_REQUEST['ajax'] == "bazaar" ){
         touch($pockethold->tpath . 'bazaar.start');
+        chdir("flarumtemp");
         $pockethold->phcomposer('require flagrow/bazaar');
         touch($pockethold->tpath . 'bazaar.done');
 
