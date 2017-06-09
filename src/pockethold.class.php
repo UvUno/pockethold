@@ -196,7 +196,7 @@ class pockethold {
         $application->setAutoExit(false);
         $input = new ArrayInput([
             'command' => 'config',
-            'github-oauth.github.com' => GITHUB_TOKEN
+            'github-oauth.github.com' => static::GITHUB_TOKEN
         ]);
         $application->run($input);
         $application->setAutoExit(false);
