@@ -395,7 +395,7 @@ else {
         //On Click Composer
         $(document).ready(function () {
             $(document).on("click", "#composerbtn", function () {
-                $(".instal1").replaceWith('<h2 class="instal1">Downlading Flarum</h2>');
+                $(".instal1").replaceWith('<h2 class="instal1">Downloading Flarum</h2>');
                 poll(ajaxurl, "cleanup1", bazaarbtn, dmsg, '');
                 return $.post(ajaxurl, {ajax: "composer"});
             })
