@@ -190,7 +190,6 @@ if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
             ]);
             $application->run($input);
             $application->setAutoExit(false);
-            //$input = new StringInput('create-project flarum/flarum ./flarum --stability=beta --no-progress --no-dev --ignore-platform-reqs');
             $input = new StringInput($command);
             // Trying to output
             $output = new StreamOutput(fopen($this->tpath . 'composer.log', 'a', false));
@@ -227,12 +226,12 @@ if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
     }elseif($_REQUEST['ajax'] == 'composer'){
         touch($pockethold->tpath . 'composer.log');
         touch($pockethold->tpath . 'compose.start');
-        $pockethold->phcomposer('create-project flarum/flarum ./flarumtemp --stability=beta --no-progress --no-dev --ignore-platform-reqs -n');
+        $pockethold->phcomposer('create-project flarum/flarum ./flarumtemp --stability=beta --prefer-dist --no-progress -n');
         touch($pockethold->tpath . 'compose.done');
     }elseif($_REQUEST['ajax'] == "bazaar" ){
         touch($pockethold->tpath . 'bazaar.start');
         chdir("flarumtemp");
-        $pockethold->phcomposer('require flagrow/bazaar --update-no-dev --ignore-platform-reqs --prefer-dist -n -o');
+        $pockethold->phcomposer('require flagrow/bazaar --prefer-dist -n -o');
         touch($pockethold->tpath . 'bazaar.done');
 
     }elseif($_REQUEST['ajax'] == 'cleanup'){
