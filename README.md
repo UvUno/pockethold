@@ -11,6 +11,6 @@ Requirements.
 
 Usage:
 Upload installer.php where you want Flarum to be installed. 
-Visit the the default: “yoururl.com/installer.php” and follow the instructions. 
+Visit the the default: `yoururl.com/installer.php` and follow the instructions. 
 
 Pockethold will redirect you upon completion.
