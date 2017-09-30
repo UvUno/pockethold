@@ -317,14 +317,9 @@ else {
                         if (data === equalname) {
                             $(".instal1").replaceWith(replacewith1);
                             $("#progressdiv").replaceWith('<div id="progressdiv"></div>');
-							if (result !== undefined) {
-								$("#progressbar-actual").css({
-									width: ((result / 88) * 100) + "%"
-								});	
-							} else
-								$("#progressbar-actual").css({
-									width: '0%'
-								});
+							$("#progressbar-actual").css({
+								width: '0%'
+							});
                             count = 0;
                             if (data === 'waiting1') {
                                 prog(url);
