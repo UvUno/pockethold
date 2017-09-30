@@ -261,13 +261,17 @@ else {
     <html lang="en">
     <head>
         <!-- Latest compiled and minified CSS -->
-        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
-              integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/css/bootstrap.min.css"
+              integrity="sha384-rwoIResjU2yc3z8GV/NPeZWAv56rSmLldC3R/AZzGRnGxQQKnKkoFVhFQhNUwEyJ"
               crossorigin="anonymous">
+		<link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet"
+			  integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN"
+			  crossorigin="anonymous">
         <script
                 src="https://code.jquery.com/jquery-3.2.1.min.js"
                 integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
                 crossorigin="anonymous"></script>
+		<title>Pockethold Pre-Alpha</title>
     </head>
     <body>
     <div class="container">
@@ -280,28 +284,29 @@ else {
                 <p style="max-width: 460px; margin:auto;">The sole purpose is to provide a way to install Flarum without
                     shell.</p>
 
-                <p style="max-width: 460px; margin:50px auto auto auto;"><span class="instal1">Checking Status</span></p>
+                <p style="max-width: 460px; margin:50px auto auto auto;"><button id="checkingbtn" class="instal1 btn btn-default btn-lg" role="button" disabled>Checking Status <i class="fa fa-cog fa-spin"></i></button></p>
                 <div id="progressdiv"></div>
+				<div id="progressbar" style="margin-top:10px;background-color: #eceeef;"><div id="progressbar-actual" class="progress-bar" role="progressbar" style="width: 0%;height:1px;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div></div>
             </div>
         </div>
     </div>
     <script>
 
         /*
-         * Requires Jquery 3
+         * Requires jQuery 3
          * */
 
         var ajaxurl = window.location.href;
         var timer;
         var count = 0;
-        var dmsg = "<h2 class='instal1'>Please Wait</h2>";
+        var dmsg = "<button class='instal1 btn btn-default btn-lg' disabled>Downloading Flarum <i class='fa fa-cog fa-spin'></i></button>";
         var fmsg = "<h2 class='instal1'>Install failed</h2>";
         var preparebtn = '<span class="instal1"><span id="preparebtn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Prepare</span></span>';
         var composerbtn = '<span id="composerbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Install</span>';
         var bazaarbtn = '<span class="instal1"><span id="cleanupbtn" class="cleanup btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="bazaarbtn" class="btn btn-lg" role="button">Install Bazaar</span></span>';
         var cleanupbtn = '<span id="cleanupbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 3: Finish</span>';
 
-        function poll(url, equalname, replacewith1, dmsg, fmsg) {
+        function poll(url, equalname, replacewith1, dmsg, fmsg, timeout = 10000) {
             timer = setTimeout(function () {
                 $.ajax({
                     url: url,
@@ -312,6 +317,14 @@ else {
                         if (data === equalname) {
                             $(".instal1").replaceWith(replacewith1);
                             $("#progressdiv").replaceWith('<div id="progressdiv"></div>');
+							if (result !== undefined) {
+								$("#progressbar-actual").css({
+									width: ((result / 88) * 100) + "%"
+								});	
+							} else
+								$("#progressbar-actual").css({
+									width: '0%'
+								});
                             count = 0;
                             if (data === 'waiting1') {
                                 prog(url);
@@ -332,7 +345,7 @@ else {
                             }
                         }
                     })
-            }, 10000)
+            }, timeout);
         };
 
         function prog(url) {
@@ -342,8 +355,10 @@ else {
                 type: 'get'
             })
                 .done(function(result) {
-                    $("#progressdiv").replaceWith('<div id="progressdiv">Progress: ' + result + ' out of 87</div>');
-
+                    $("#progressdiv").replaceWith('<div id="progressdiv">Progress: ' + result + ' out of 91</div>');
+					$("#progressbar-actual").css({
+						width: ((result / 91) * 100) + "%"
+					});
                 }).fail(function() {
             });
         };
@@ -368,10 +383,10 @@ else {
                     } else if (res === 'cleanup2') {
                         $(".instal1").replaceWith(cleanupbtn);
                     } else if (res === 'waiting1') {
-                        $(".instal1").replaceWith('<h2 class="instal1">Flarum is downloading!</h2>');
-                        poll(ajaxurl, 'cleanup1', bazaarbtn, dmsg, '');
+                        $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Downloading Flarum <i class="fa fa-cog fa-spin"></i></button>');
+                        poll(ajaxurl, 'cleanup1', bazaarbtn, dmsg, '', 0);
                     } else if (res === 'waiting2') {
-                        $(".instal1").replaceWith('<h2 class="instal1">Bazaar is being installed!</h2>');
+                        $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Installing Bazaar <i class="fa fa-cog fa-spin"></i></button>');
                         poll(ajaxurl, 'cleanup2', cleanupbtn, dmsg, '');
                     }
                 })
@@ -386,7 +401,7 @@ else {
         //On Click Prepare
         $(document).ready(function () {
             $(document).on("click", "#preparebtn", function () {
-                $(".instal1").replaceWith('<h2 class="instal1">Downloading Composer</h2>');
+                $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Downloading Composer <i class="fa fa-cog fa-spin"></i></button>');
                 poll(ajaxurl, "composer", composerbtn, dmsg, '');
                 return $.post(ajaxurl, {ajax: "prepare"});
             })
@@ -394,7 +409,7 @@ else {
         //On Click Composer
         $(document).ready(function () {
             $(document).on("click", "#composerbtn", function () {
-                $(".instal1").replaceWith('<h2 class="instal1">Downloading Flarum</h2>');
+                $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Downloading Flarum <i class="fa fa-cog fa-spin"></i></button>');
                 poll(ajaxurl, "cleanup1", bazaarbtn, dmsg, '');
                 return $.post(ajaxurl, {ajax: "composer"});
             })
@@ -402,7 +417,7 @@ else {
         //On Click Bazaar
         $(document).ready(function () {
             $(document).on("click", "#bazaarbtn", function () {
-                $(".instal1").replaceWith('<h2 class="instal1">Installing Bazaar</h2>' );
+                $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Installing Bazaar <i class="fa fa-cog fa-spin"></i></button>' );
                 poll(ajaxurl, 'cleanup2', cleanupbtn, dmsg, '');
                 return $.post(ajaxurl, {ajax: "bazaar"});
             })
@@ -410,7 +425,7 @@ else {
         //On Click Composer
         $(document).ready(function () {
             $(document).on("click", "#cleanupbtn", function () {
-                $(".instal1").replaceWith('<h2 class="instal1">Removing Installer</h2>');
+                $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Removing Installer <i class="fa fa-cog fa-spin"></i></button>');
                 return $.post(ajaxurl, {ajax: "cleanup"})
                     .done(function() {
                         window.setTimeout(window.location.href = "./",10000);
