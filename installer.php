@@ -177,7 +177,7 @@ if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
             set_time_limit(1100);
 
             require_once($this->tpath . 'vendor/autoload.php');
-            $this->phlog('Composer:', 'Starting Create-Project', $this->tpath . 'install.log');
+            $this->phlog('Composer:', 'Starting Create-Project', 'install.log');
             putenv('COMPOSER_HOME=' . $this->tpath);
             putenv('COMPOSER_NO_INTERACTION=true');
             putenv('COMPOSER_PROCESS_TIMEOUT=1000');
