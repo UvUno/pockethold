@@ -7,252 +7,286 @@ use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\StringInput;
 use Symfony\Component\Console\Output\StreamOutput;
 
-if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
+const GITHUB_TOKEN = 'ec785da935d5535e151f7b3386190265f00e8fe2';
+
+/**
+ * Class pockethold
+ */
+class Pockethold {
+
+    var $tpath;
+    var $ipath;
+
+    public function __construct($installpath, $temppath)
+    {
+
+        //Add validation here of correct URL here?
+        $this->tpath = $temppath;
+        $this->ipath = $installpath;
+        if ( !file_exists($this->tpath) )
+        {
+            mkdir($this->tpath);
+        }
+    }
+
     /**
-     * Class pockethold
+     * phlog - For logging things.
+     * @param $type
+     * @param $msg
+     * @param $filename
      */
-    class pockethold {
+    public function phlog($type, $msg, $filename)
+    {
+        //Get timestamp
+        $ltime = date("D M j G:i:s");
+        //combine message
+        $log = $ltime . ': ' . $type . ' ' . $msg . "\n";
+        //Insert into Log
+        file_put_contents($this->tpath . $filename, $log, FILE_APPEND | LOCK_EX);
+    }
 
-        const GITHUB_TOKEN = 'ec785da935d5535e151f7b3386190265f00e8fe2';
-        var $tpath;
-        var $ipath;
+    public function phstatus()
+    {
 
-        public function __construct($installpath, $temppath){
+        $i = "prepare";
 
-            //Add validation here of correct URL here?
-            $this->tpath = $temppath;
-            $this->ipath = $installpath;
-            if ( !file_exists($this->tpath) )
-            {
-                mkdir($this->tpath);
-            }
+        if ( file_exists($this->tpath . 'vendor/autoload.php') ) {
+            $i = "composer";
         }
-
-        /**
-         * phlog - For logging things.
-         * @param $type
-         * @param $msg
-         * @param $filename
-         */
-        public function phlog($type, $msg, $filename) {
-            //Get timestamp
-            $ltime = date("D M j G:i:s");
-            //combine message
-            $log = $ltime . ': ' . $type . ' ' . $msg . "\n";
-            //Insert into Log
-            file_put_contents($this->tpath . $filename, $log, FILE_APPEND | LOCK_EX);
+        if ( file_exists($this->tpath . 'vendor/autoload.php') ) {
+            $i = "prepare2";
         }
-
-        public function phstatus(){
-
-            $i = "prepare";
-
-            if ( file_exists($this->tpath . 'vendor/autoload.php') ) {
-                $i = "composer";
-            }
-            if ( file_exists($this->tpath . 'compose.start') ) {
-                $i = "waiting1";
-            }
-            if ( file_exists($this->tpath . 'compose.done') ) {
-                $i = "cleanup1";
-            }
-            if ( file_exists($this->tpath . 'bazaar.start') ) {
-                $i = "waiting2";
-            }
-            if ( file_exists($this->tpath . 'bazaar.done') ) {
-                $i = "cleanup2";
-            }
-            return $i;
-
+        if ( file_exists($this->tpath . 'compose.start') ) {
+            $i = "waiting1";
         }
-
-        private function phgetfile($src){
-            if ( !file_put_contents($this->tpath . 'composer.phar', fopen($src, 'r')) ) {
-                //Shamelessly stolen, and herby credited, from Luceos's flarum installer proof of concept.
-                $c = curl_init($src);
-                curl_setopt_array($c, [
-                    CURLOPT_RETURNTRANSFER => true
-                ]);
-                $phar = curl_exec($c);
-                curl_close($c);
-                file_put_contents($this->tpath . 'composer.phar', $phar);
-                unset($phar);
-            }
-
+        if ( file_exists($this->tpath . 'compose.done') ) {
+            $i = "cleanup1";
         }
-
-        public function prepare(){
-            if ( !file_exists($this->tpath . 'composer.phar') ) {
-                $this->phgetfile('https://getcomposer.org/composer.phar');
-            }
-            $composer = new Phar($this->tpath . "composer.phar");
-            $composer->extractTo($this->tpath);
+        if ( file_exists($this->tpath . 'bazaar.start') ) {
+            $i = "waiting2";
         }
-
-        /**
-         * Count lines of file.
-         * @param $file
-         * @return int
-         */
-        public function phlines ($file){
-            $lines = 0;
-            $file = fopen( $file, 'r');
-
-            while( !feof( $file) ) {
-
-                fgets($file);
-
-                $lines++;
-            }
-
-            fclose( $file);
-            return $lines;
+        if ( file_exists($this->tpath . 'bazaar.done') ) {
+            $i = "cleanup2";
         }
+        return $i;
+    }
 
-        /**
-         * getfile($src, $dest) - downloads a file and saves it on the web server.
-         *
-         * @param $dir
-         */
-        function rrmdir($dir)
-        {
-            if ( is_dir($dir) ) {
-                $objects = scandir($dir);
-                foreach ($objects as $object) {
-                    if ( $object != "." && $object != ".." ) {
-                        if ( is_dir($dir . "/" . $object) )
-                            $this->rrmdir($dir . "/" . $object);
-                        else
-                            unlink($dir . "/" . $object);
-                    }
-                }
-                rmdir($dir);
-            }
-        }
-
-        /**
-         * Recursively move files from one directory to another
-         *
-         * @param String $src - Source of files being moved
-         * @param String $dest - Destination of files being moved
-         * @return NULL
-         */
-        function rmove($src, $dest)
-        {
-
-            // If source is not a directory stop processing
-            if ( !is_dir($src) ) return false;
-
-            // If the destination directory does not exist create it
-            if ( !is_dir($dest) ) {
-                if ( !mkdir($dest) ) {
-                    // If the destination directory could not be created stop processing
-                    return false;
-                }
-            }
-
-            // Open the source directory to read in files
-            $i = new DirectoryIterator($src);
-            foreach ($i as $f) {
-                if ( $f->isFile() ) {
-                    rename($f->getRealPath(), "$dest/" . $f->getFilename());
-                } else if ( !$f->isDot() && $f->isDir() ) {
-                    $this->rmove($f->getRealPath(), "$dest/$f");
-                    unlink($f->getRealPath());
-                }
-            }
-            unlink($src);
-        }
-
-        public function phcomposer($command){
-
-            $ini_get_option_details = ini_get_all();
-            if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
-                ini_set('memory_limit', '1G');
-            } else {
-                die("Not enough memory!");
-            }
-
-            ignore_user_abort(true);
-            set_time_limit(1100);
-
-            require_once($this->tpath . 'vendor/autoload.php');
-            $this->phlog('Composer:', 'Starting Create-Project', 'install.log');
-            putenv('COMPOSER_HOME=' . $this->tpath);
-            putenv('COMPOSER_NO_INTERACTION=true');
-            putenv('COMPOSER_PROCESS_TIMEOUT=1000');
-
-            $application = new Application();
-            $application->setAutoExit(false);
-            $input = new ArrayInput([
-                'command' => 'config',
-                'github-oauth.github.com' => GITHUB_TOKEN
+    private function phgetfile($src)
+    {
+        if ( !file_put_contents($this->tpath . 'composer.phar', fopen($src, 'r')) ) {
+            //Shamelessly stolen, and herby credited, from Luceos's flarum installer proof of concept.
+            $c = curl_init($src);
+            curl_setopt_array($c, [
+                CURLOPT_RETURNTRANSFER => true
             ]);
-            $application->run($input);
-            $application->setAutoExit(false);
-            $input = new StringInput($command);
-            // Trying to output
-            $output = new StreamOutput(fopen($this->tpath . 'composer.log', 'a', false));
-
-            $application->run($input, $output);
-            unset($input);
-            unset($application);
-
-            return 'done';
+            $phar = curl_exec($c);
+            curl_close($c);
+            file_put_contents($this->tpath . 'composer.phar', $phar);
+            unset($phar);
         }
-
 
     }
 
+    public function getComposer()
+    {
+        if ( !file_exists($this->tpath . 'composer.phar') ) {
+            $this->phgetfile('https://getcomposer.org/composer.phar');
+        }
+        $composer = new Phar($this->tpath . "composer.phar");
+        $composer->extractTo($this->tpath);
+    }
+
+    /**
+     * Count lines of file.
+     * @param $file
+     * @return int
+     */
+    public function phlines ($file)
+    {
+        $lines = 0;
+        $file = fopen( $file, 'r');
+
+        while( !feof( $file) ) {
+
+            fgets($file);
+
+            $lines++;
+        }
+
+        fclose( $file);
+        return $lines;
+    }
+
+    /**
+     * getfile($src, $dest) - downloads a file and saves it on the web server.
+     *
+     * @param $dir
+     */
+    function rrmdir($dir)
+    {
+        if ( is_dir($dir) ) {
+            $objects = scandir($dir);
+            foreach ($objects as $object) {
+                if ( $object != "." && $object != ".." ) {
+                    if ( is_dir($dir . "/" . $object) )
+                        $this->rrmdir($dir . "/" . $object);
+                    else
+                        unlink($dir . "/" . $object);
+                }
+            }
+            rmdir($dir);
+        }
+    }
+
+    /**
+     * Recursively move files from one directory to another
+     *
+     * @param String $src - Source of files being moved
+     * @param String $dest - Destination of files being moved
+     * @return NULL
+     */
+    function rmove($src, $dest)
+    {
+
+        // If source is not a directory stop processing
+        if ( !is_dir($src) ) return false;
+
+        // If the destination directory does not exist create it
+        if ( !is_dir($dest) ) {
+            if ( !mkdir($dest) ) {
+                // If the destination directory could not be created stop processing
+                return false;
+            }
+        }
+
+        // Open the source directory to read in files
+        $i = new DirectoryIterator($src);
+        foreach ($i as $f) {
+            if ( $f->isFile() ) {
+                rename($f->getRealPath(), "$dest/" . $f->getFilename());
+            } else if ( !$f->isDot() && $f->isDir() ) {
+                $this->rmove($f->getRealPath(), "$dest/$f");
+                unlink($f->getRealPath());
+            }
+        }
+        unlink($src);
+    }
+
+    public function phcomposer($command, $taskname)
+    {
+        touch($this->tpath . 'composer.log');
+        touch($this->tpath . $taskname . '.start');
+        $ini_get_option_details = ini_get_all();
+        if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
+            ini_set('memory_limit', '1G');
+        } else {
+            die("Not enough memory!");
+        }
+
+        ignore_user_abort(true);
+        set_time_limit(1100);
+
+        require_once($this->tpath . 'vendor/autoload.php');
+        $this->phlog('Composer:', 'Starting Create-Project', 'install.log');
+        putenv('COMPOSER_HOME=' . $this->tpath);
+        putenv('COMPOSER_NO_INTERACTION=true');
+        putenv('COMPOSER_PROCESS_TIMEOUT=1000');
+
+        $application = new Application();
+        $application->setAutoExit(false);
+        $input = new ArrayInput([
+            'command' => 'config',
+            'github-oauth.github.com' => GITHUB_TOKEN
+        ]);
+        $application->run($input);
+        $application->setAutoExit(false);
+        $input = new StringInput($command);
+        // Trying to output
+        $output = new StreamOutput(fopen($this->tpath . 'composer.log', 'a', false));
+
+        $application->run($input, $output);
+        unset($input);
+        unset($application);
+        touch($this->tpath . $taskname . '.stop');
+        return 'done';
+    }
+
+    function listen($request)
+    {
+        $allowed = array('status','prepare1','prepare2','install','bazaar','cleanup','log');
+        if(!in_array($request,$allowed)) {
+            $this->phlog('Ajax Blocked:',$request,'ajax.log');
+            echo "Invalid";
+        } else {
+            $this->phlog('Ajax Allowed:',$request,'ajax.log');
+            $this->process($request);
+        }
+    }
+
+    function process($request)
+    {
+
+        $status = $this->phstatus();
+
+        if ($request == $status) {
+            if ($request == 'status') {
+                echo $status;
+            } elseif ($request == 'prepare1') {
+                echo 'Initiated';
+
+                $this->getComposer();
+
+            } elseif ($request == 'prepare2') {
+                echo 'Initiated';
+
+                $this->phcomposer('global require hirak/prestissimo', 'Prestissimo');
+
+            } elseif ($request == 'install') {
+
+                echo 'Initiated';
+                $this->phcomposer('create-project flarum/flarum ./flarumtemp --stability=beta --prefer-dist --no-progress -n', 'Flarum');
+
+            } elseif ($request == 'bazaar') {
+                echo 'Initiated';
+                chdir("flarumtemp");
+                $this->phcomposer('require flagrow/bazaar --prefer-dist -n -o', 'Bazaar');
+            } elseif ($request == 'cleanup') {
+                echo 'Initiated';
+                $this->cleanup();
+            }
+        }
+
+    }
+    function cleanup() {
+
+        $this->rmove($this->ipath . "flarumtemp", $this->ipath);
+        //Removes temporary directory
+        $this->rrmdir($this->tpath);
+        //Removes installer.php
+        unlink($this->ipath . 'installer.php');
+        echo "Complete";
+    }
+
+    function progress()
+    {
+        //Legacy code - Needs rewrite and is not used atm.
+        $this->phlog('Status: ', $this->tpath, 'install.log');
+        $linecount = $this->phlines($this->tpath . 'composer.log');
+        $this->tpath->phlog('Status: ', "composer.log is currently $linecount long", 'install.log');
+        echo $linecount;
+    }
+}
+
+if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
     if ( !defined('ABSPATH') )
     {
         define('ABSPATH', dirname(__FILE__) . '/');
     }
     $tmppath = (ABSPATH . 'temp/');
 
-    $pockethold = new pockethold(ABSPATH, $tmppath);
-
-    if($_REQUEST['ajax'] == 'status'){
-
-        $status = $pockethold->phstatus();
-        $pockethold->phlog('Status: ', $status, 'install.log');
-        echo $status;
-
-    }elseif($_REQUEST['ajax'] == 'prepare'){
-
-        $pockethold->prepare();
-        $pockethold->phlog('Status: ', 'Composer is Unpacked', 'install.log');
-
-    }elseif($_REQUEST['ajax'] == 'composer'){
-        touch($pockethold->tpath . 'composer.log');
-        touch($pockethold->tpath . 'compose.start');
-        $pockethold->phcomposer('create-project flarum/flarum ./flarumtemp --stability=beta --prefer-dist --no-progress -n');
-        touch($pockethold->tpath . 'compose.done');
-    }elseif($_REQUEST['ajax'] == "bazaar" ){
-        touch($pockethold->tpath . 'bazaar.start');
-        chdir("flarumtemp");
-        $pockethold->phcomposer('require flagrow/bazaar --prefer-dist -n -o');
-        touch($pockethold->tpath . 'bazaar.done');
-
-    }elseif($_REQUEST['ajax'] == 'cleanup'){
-
-        $pockethold->rmove($pockethold->ipath . "flarumtemp", $pockethold->ipath);
-
-//Removes temporary directory
-        $pockethold->rrmdir($pockethold->tpath);
-//Removes installer.php
-        unlink(__FILE__);
-        echo "Complete";
-
-    }elseif($_REQUEST['ajax'] == 'progress'){
-        $pockethold->phlog('Status: ', $tmppath, 'install.log');
-        $linecount = $pockethold->phlines($tmppath . 'composer.log');
-        $pockethold->phlog('Status: ', "composer.log is currently $linecount long", 'install.log');
-        echo $linecount;
-    } else {
-        die();
-    }
-
+    // Listen for Ajax Calls
+    $ear = new Pockethold(ABSPATH, $tmppath);
+    $ear->listen($_REQUEST['ajax']);
 }
 else {
     ?>
@@ -271,7 +305,7 @@ else {
                 src="https://code.jquery.com/jquery-3.2.1.min.js"
                 integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
                 crossorigin="anonymous"></script>
-		<title>Pockethold Pre-Alpha</title>
+		<title>Pockethold: Flarum Installer</title>
     </head>
     <body>
     <div class="container">
@@ -434,3 +468,9 @@ else {
 
     <?php
 }
+
+
+
+
+
+
