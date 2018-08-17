@@ -47,17 +47,40 @@ class Pockethold {
 
     public function phstatus()
     {
+        $i = "prepare1";
 
-        $i = "prepare";
+        if ( file_exists($this->tpath . 'vendor/autoload.php')
+        && file_exists($this->tpath . 'unpack.done') ) {
 
-        if ( file_exists($this->tpath . 'vendor/autoload.php') ) {
-            $i = "composer";
+            if ( !file_exists($this->tpath . 'prestissimo.start') )
+            {
+                $i = "waiting";
+            }
+            elseif ( file_exists($this->tpath . 'prestissimo.done' ) ) {
+                $i = "flarum";
+            }
+            elseif ( file_exists($this->tpath . 'flarum.start' ) ) {
+                $i = "waiting";
+                if ( file_exists($this->tpath . 'flarum.done' ) ) {
+                    $i = "bazaar";
+                }
+                if ( file_exists($this->tpath . 'bazaar.start' ) ) {
+                    $i = "waiting";
+                }
+                if ( file_exists($this->tpath . 'bazaar.done' ) ) {
+                    $i = "cleanup";
+                }
+            }
+            else {
+                $i = "prepare2";
+            }
         }
-        if ( file_exists($this->tpath . 'vendor/autoload.php') ) {
-            $i = "prepare2";
-        }
-        if ( file_exists($this->tpath . 'compose.start') ) {
-            $i = "waiting1";
+
+        if ( file_exists($this->tpath . 'flarum.start') ) {
+            $i = "waiting";
+                if ( file_exists($this->tpath . 'flarum.done') ) {
+                    $i = "baz";
+                }
         }
         if ( file_exists($this->tpath . 'compose.done') ) {
             $i = "cleanup1";
@@ -89,11 +112,13 @@ class Pockethold {
 
     public function getComposer()
     {
+        touch($this->tpath . 'unpack.start');
         if ( !file_exists($this->tpath . 'composer.phar') ) {
             $this->phgetfile('https://getcomposer.org/composer.phar');
         }
         $composer = new Phar($this->tpath . "composer.phar");
         $composer->extractTo($this->tpath);
+        touch($this->tpath . 'done.start');
     }
 
     /**
@@ -233,23 +258,17 @@ class Pockethold {
                 echo $status;
             } elseif ($request == 'prepare1') {
                 echo 'Initiated';
-
                 $this->getComposer();
-
             } elseif ($request == 'prepare2') {
                 echo 'Initiated';
-
-                $this->phcomposer('global require hirak/prestissimo', 'Prestissimo');
-
-            } elseif ($request == 'install') {
-
+                $this->phcomposer('global require hirak/prestissimo', 'prestissimo');
+            } elseif ($request == 'flarum') {
                 echo 'Initiated';
-                $this->phcomposer('create-project flarum/flarum ./flarumtemp --stability=beta --prefer-dist --no-progress -n', 'Flarum');
-
+                $this->phcomposer('create-project flarum/flarum ./flarumtemp --stability=beta --prefer-dist --no-progress -n', 'flarum');
             } elseif ($request == 'bazaar') {
                 echo 'Initiated';
                 chdir("flarumtemp");
-                $this->phcomposer('require flagrow/bazaar --prefer-dist -n -o', 'Bazaar');
+                $this->phcomposer('require flagrow/bazaar --prefer-dist -n -o', 'bazaar');
             } elseif ($request == 'cleanup') {
                 echo 'Initiated';
                 $this->cleanup();
@@ -325,7 +344,6 @@ else {
         </div>
     </div>
     <script>
-
         /*
          * Requires jQuery 3
          * */
@@ -333,14 +351,16 @@ else {
         var ajaxurl = window.location.href;
         var timer;
         var count = 0;
-        var dmsg = "<button class='instal1 btn btn-default btn-lg' disabled>Downloading Flarum <i class='fa fa-cog fa-spin'></i></button>";
         var fmsg = "<h2 class='instal1'>Install failed</h2>";
-        var preparebtn = '<span class="instal1"><span id="preparebtn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Prepare</span></span>';
-        var composerbtn = '<span id="composerbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Install</span>';
-        var bazaarbtn = '<span class="instal1"><span id="cleanupbtn" class="cleanup btn btn-primary btn-lg" role="button">Step 3: Finish</span><span id="bazaarbtn" class="btn btn-lg" role="button">Install Bazaar</span></span>';
-        var cleanupbtn = '<span id="cleanupbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 3: Finish</span>';
 
-        function poll(url, equalname, replacewith1, dmsg, fmsg, timeout = 10000) {
+        var waiting = "<button class='instal1 btn btn-default btn-lg' disabled>Working Please wait <i class='fa fa-cog fa-spin'></i></button>";
+        var prepare1 = '<span class="instal1"><span id="prepare1btn" class="instal1 btn btn-primary btn-lg" role="button">Step 1a: Download Composer</span></span>';
+        var prepare2 = '<span class="instal1"><span id="prepare2btn" class="instal1 btn btn-primary btn-lg" role="button">Step 1b: Optimize Composer</span></span>';
+        var flarum = '<span id="flarumbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Download Flarum</span>';
+        var bazaar = '<span class="instal1"><span id="bazaarbtn" class="cleanup btn btn-primary btn-lg" role="button">Step 3: Download Bazaar</span></span>';
+        var cleanup = '<span id="cleanupbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 4: Start Flarum Installer</span>';
+
+        function status(url) {
             timer = setTimeout(function () {
                 $.ajax({
                     url: url,
@@ -348,129 +368,56 @@ else {
                     type: 'get'
                 })
                     .done(function (data) {
-                        if (data === equalname) {
-                            $(".instal1").replaceWith(replacewith1);
-                            $("#progressdiv").replaceWith('<div id="progressdiv"></div>');
-							$("#progressbar-actual").css({
-								width: '0%'
-							});
-                            count = 0;
-                            if (data === 'waiting1') {
-                                prog(url);
-                            }
-                        }
-                        else {
-                            if (++count > 110) {
-                                $(".instal1").replaceWith(fmsg);
-                                $("#progressdiv").replaceWith('<div id="progressdiv">Timed out, or failed. Check logs.</div>');
-                            }
-                            else {
-                                if (data === 'waiting1') {
-                                    prog(url);
-                                }
-                                $(".instal1").replaceWith(dmsg);
-                                poll(url, equalname, replacewith1, dmsg, fmsg);
-
-                            }
-                        }
+                        $("#progressdiv").html(data);
+                        status(url);
                     })
-            }, timeout);
+            }, 10000);
         };
-
-        function prog(url) {
-            $.ajax({
-                url: url,
-                data: {ajax: "progress"},
-                type: 'get'
-            })
-                .done(function(result) {
-                    $("#progressdiv").replaceWith('<div id="progressdiv">Progress: ' + result + ' out of 91</div>');
-					$("#progressbar-actual").css({
-						width: ((result / 91) * 100) + "%"
-					});
-                }).fail(function() {
-            });
-        };
-
-
-        //Actual commands
         // Runs at startup.
+        status(url);
+
+        //On Click Prepare unpack composer
         $(document).ready(function () {
-            $.ajax({
-                url: ajaxurl,
-                data: {ajax: "status"},
-                type: 'get'
-            })
-                .done(function (res) {
-                    console.log(res);
-                    if (res === 'prepare') {
-                        $(".instal1").replaceWith(preparebtn);
-                    } else if (res === 'composer') {
-                        $(".instal1").replaceWith(composerbtn);
-                    } else if (res === 'cleanup1') {
-                        $(".instal1").replaceWith(bazaarbtn);
-                    } else if (res === 'cleanup2') {
-                        $(".instal1").replaceWith(cleanupbtn);
-                    } else if (res === 'waiting1') {
-                        $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Downloading Flarum <i class="fa fa-cog fa-spin"></i></button>');
-                        poll(ajaxurl, 'cleanup1', bazaarbtn, dmsg, '', 0);
-                    } else if (res === 'waiting2') {
-                        $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Installing Bazaar <i class="fa fa-cog fa-spin"></i></button>');
-                        poll(ajaxurl, 'cleanup2', cleanupbtn, dmsg, '');
-                    }
-                })
-                .fail(function (err) {
-                    console.log('Error: ' + err.status);
-                    $(".install").replaceWith('<h2 class="instal1">Error:' + err.status + '</h2>');
-                });
-
-
-        });
-
-        //On Click Prepare
-        $(document).ready(function () {
-            $(document).on("click", "#preparebtn", function () {
-                $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Downloading Composer <i class="fa fa-cog fa-spin"></i></button>');
-                poll(ajaxurl, "composer", composerbtn, dmsg, '');
-                return $.post(ajaxurl, {ajax: "prepare"});
+            $(document).on("click", "#prepare1btn", function () {
+                $("#progressdiv").html(waiting);
+                return $.post(ajaxurl, {ajax: "prepare1"});
             })
         });
-        //On Click Composer
+        //On Click prepare1 - install composer plugin prestissimo
+        $(document).ready(function () {
+            $(document).on("click", "prepare2btn", function () {
+                $("#progressdiv").replaceWith(waiting);
+
+                return $.post(ajaxurl, {ajax: "prepare2"});
+            })
+        });
+        //On Click Flarum
         $(document).ready(function () {
             $(document).on("click", "#composerbtn", function () {
-                $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Downloading Flarum <i class="fa fa-cog fa-spin"></i></button>');
-                poll(ajaxurl, "cleanup1", bazaarbtn, dmsg, '');
-                return $.post(ajaxurl, {ajax: "composer"});
+                $("#progressdiv").replaceWith(waiting);
+                return $.post(ajaxurl, {ajax: "flarum"});
             })
         });
         //On Click Bazaar
         $(document).ready(function () {
             $(document).on("click", "#bazaarbtn", function () {
-                $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Installing Bazaar <i class="fa fa-cog fa-spin"></i></button>' );
-                poll(ajaxurl, 'cleanup2', cleanupbtn, dmsg, '');
+                $(".instal1").replaceWith(waiting);
                 return $.post(ajaxurl, {ajax: "bazaar"});
             })
         });
-        //On Click Composer
+        //On Click Cleanup
         $(document).ready(function () {
             $(document).on("click", "#cleanupbtn", function () {
-                $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Removing Installer <i class="fa fa-cog fa-spin"></i></button>');
+                $(".instal1").replaceWith('<button class="instal1 btn btn-default btn-lg" disabled>Removing Installer<i class="fa fa-cog fa-spin"></i></button>');
                 return $.post(ajaxurl, {ajax: "cleanup"})
                     .done(function() {
                         window.setTimeout(window.location.href = "./",10000);
                     });
             })
         });
-
     </script>
     </body>
     </html>
 
     <?php
 }
-
-
-
-
-
-
