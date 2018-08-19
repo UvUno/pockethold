@@ -47,49 +47,39 @@ class Pockethold {
 
     public function phstatus()
     {
+
         $i = "prepare1";
 
         if ( file_exists($this->tpath . 'vendor/autoload.php')
         && file_exists($this->tpath . 'unpack.done') ) {
 
+            if ( file_exists($this->tpath . 'bazaar.done' ) ) {
+                $i = "cleanup";
+                return $i;
+            }
+            if ( file_exists($this->tpath . 'bazaar.start' ) ) {
+                $i = "waiting";
+                return $i;
+            }
+            if ( file_exists($this->tpath . 'flarum.done' ) ) {
+                $i = "bazaar";
+                return $i;
+            }
+            if ( file_exists($this->tpath . 'flarum.start' ) ) {
+                $i = "waiting";
+                return $i;
+            }
+            if ( file_exists($this->tpath . 'prestissimo.done' ) ) {
+                $i = "flarum";
+                return $i;
+            }
             if ( !file_exists($this->tpath . 'prestissimo.start') )
             {
-                $i = "waiting";
-            }
-            elseif ( file_exists($this->tpath . 'prestissimo.done' ) ) {
-                $i = "flarum";
-            }
-            elseif ( file_exists($this->tpath . 'flarum.start' ) ) {
-                $i = "waiting";
-                if ( file_exists($this->tpath . 'flarum.done' ) ) {
-                    $i = "bazaar";
-                }
-                if ( file_exists($this->tpath . 'bazaar.start' ) ) {
-                    $i = "waiting";
-                }
-                if ( file_exists($this->tpath . 'bazaar.done' ) ) {
-                    $i = "cleanup";
-                }
-            }
-            else {
                 $i = "prepare2";
+                return $i;
             }
-        }
 
-        if ( file_exists($this->tpath . 'flarum.start') ) {
-            $i = "waiting";
-                if ( file_exists($this->tpath . 'flarum.done') ) {
-                    $i = "baz";
-                }
-        }
-        if ( file_exists($this->tpath . 'compose.done') ) {
-            $i = "cleanup1";
-        }
-        if ( file_exists($this->tpath . 'bazaar.start') ) {
-            $i = "waiting2";
-        }
-        if ( file_exists($this->tpath . 'bazaar.done') ) {
-            $i = "cleanup2";
+
         }
         return $i;
     }
@@ -118,7 +108,7 @@ class Pockethold {
         }
         $composer = new Phar($this->tpath . "composer.phar");
         $composer->extractTo($this->tpath);
-        touch($this->tpath . 'done.start');
+        touch($this->tpath . 'unpack.done');
     }
 
     /**
@@ -210,9 +200,9 @@ class Pockethold {
 
         ignore_user_abort(true);
         set_time_limit(1100);
-
         require_once($this->tpath . 'vendor/autoload.php');
-        $this->phlog('Composer:', 'Starting Create-Project', 'install.log');
+
+        $this->phlog('Composer:', 'Starting Create-Project ' . $taskname, 'install.log');
         putenv('COMPOSER_HOME=' . $this->tpath);
         putenv('COMPOSER_NO_INTERACTION=true');
         putenv('COMPOSER_PROCESS_TIMEOUT=1000');
@@ -232,13 +222,13 @@ class Pockethold {
         $application->run($input, $output);
         unset($input);
         unset($application);
-        touch($this->tpath . $taskname . '.stop');
+        touch($this->tpath . $taskname . '.done');
         return 'done';
     }
 
     function listen($request)
     {
-        $allowed = array('status','prepare1','prepare2','install','bazaar','cleanup','log');
+        $allowed = array('status','prepare1','prepare2','flarum','bazaar','cleanup','log');
         if(!in_array($request,$allowed)) {
             $this->phlog('Ajax Blocked:',$request,'ajax.log');
             echo "Invalid";
@@ -250,13 +240,9 @@ class Pockethold {
 
     function process($request)
     {
-
         $status = $this->phstatus();
-
         if ($request == $status) {
-            if ($request == 'status') {
-                echo $status;
-            } elseif ($request == 'prepare1') {
+            if ($request == 'prepare1') {
                 echo 'Initiated';
                 $this->getComposer();
             } elseif ($request == 'prepare2') {
@@ -273,6 +259,8 @@ class Pockethold {
                 echo 'Initiated';
                 $this->cleanup();
             }
+        } elseif ($request == 'status') {
+            echo $status;
         }
 
     }
@@ -305,7 +293,7 @@ if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
 
     // Listen for Ajax Calls
     $ear = new Pockethold(ABSPATH, $tmppath);
-    $ear->listen($_REQUEST['ajax']);
+    echo $ear->listen($_REQUEST['ajax']);
 }
 else {
     ?>
@@ -337,8 +325,10 @@ else {
                 <p style="max-width: 460px; margin:auto;">The sole purpose is to provide a way to install Flarum without
                     shell.</p>
 
-                <p style="max-width: 460px; margin:50px auto auto auto;"><button id="checkingbtn" class="instal1 btn btn-default btn-lg" role="button" disabled>Checking Status <i class="fa fa-cog fa-spin"></i></button></p>
-                <div id="progressdiv"></div>
+
+                <div id="progressdiv">
+                    <p style="max-width: 460px; margin:50px auto auto auto;"><button id="checkingbtn" class="instal1 btn btn-default btn-lg" role="button" disabled>Checking Status <i class="fa fa-cog fa-spin"></i></button></p>
+                </div>
 				<div id="progressbar" style="margin-top:10px;background-color: #eceeef;"><div id="progressbar-actual" class="progress-bar" role="progressbar" style="width: 0%;height:1px;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div></div>
             </div>
         </div>
@@ -368,13 +358,13 @@ else {
                     type: 'get'
                 })
                     .done(function (data) {
-                        $("#progressdiv").html(data);
+                        $("#progressdiv").html(window[data]);
                         status(url);
                     })
             }, 10000);
         };
         // Runs at startup.
-        status(url);
+        status(ajaxurl);
 
         //On Click Prepare unpack composer
         $(document).ready(function () {
@@ -385,7 +375,7 @@ else {
         });
         //On Click prepare1 - install composer plugin prestissimo
         $(document).ready(function () {
-            $(document).on("click", "prepare2btn", function () {
+            $(document).on("click", "#prepare2btn", function () {
                 $("#progressdiv").replaceWith(waiting);
 
                 return $.post(ajaxurl, {ajax: "prepare2"});
@@ -393,7 +383,7 @@ else {
         });
         //On Click Flarum
         $(document).ready(function () {
-            $(document).on("click", "#composerbtn", function () {
+            $(document).on("click", "#flarumbtn", function () {
                 $("#progressdiv").replaceWith(waiting);
                 return $.post(ajaxurl, {ajax: "flarum"});
             })
