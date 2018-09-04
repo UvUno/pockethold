@@ -222,7 +222,7 @@ class Pockethold {
 
     function listen($request)
     {
-        $allowed = array('status','prepare1','flarum','bazaar','cleanup','log');
+        $allowed = array('status','prepare1','flarum','bazaar','cleanup','log', progress);
         if(!in_array($request,$allowed)) {
             $this->phlog('Ajax Blocked:',$request,'ajax.log');
             echo "Invalid";
@@ -252,8 +252,9 @@ class Pockethold {
             }
         } elseif ($request == 'status') {
             echo $status;
+        } elseif ($request == 'progress') {
+            echo $this->composerProgress("composer.log");
         }
-
     }
     function cleanup() {
 
@@ -265,14 +266,17 @@ class Pockethold {
         echo "Complete";
     }
 
-    function progress()
-    {
-        //Legacy code - Needs rewrite and is not used atm.
-        $this->phlog('Status: ', $this->tpath, 'install.log');
-        $linecount = $this->phlines($this->tpath . 'composer.log');
-        $this->tpath->phlog('Status: ', "composer.log is currently $linecount long", 'install.log');
-        echo $linecount;
+    /**
+     * composerProgress($file) - Returns amount of finished vendors and the total. Composer output.
+     *
+     * @param $file
+     */
+    function composerProgress($file){
+        $log_file = file_get_contents($this->tpath . $file);
+        $result  = "<pre>" . $log_file . "</pre>";
+        return $result;
     }
+
 }
 
 if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
@@ -331,12 +335,24 @@ else {
         var count = 0;
         var fmsg = "<h2 class='instal1'>Install failed</h2>";
 
-        var waiting = "<button class='instal1 btn btn-default btn-lg' disabled>Working Please wait <i class='fa fa-cog fa-spin'></i></button>";
+        var waiting = "<button class='instal1 btn btn-default btn-lg' disabled>Working Please wait <i class='fa fa-cog fa-spin'></i></button><div id='progress'></div>";
         var prepare1 = '<span class="instal1"><span id="prepare1btn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Download Composer</span></span>';
 
         var flarum = '<span id="flarumbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Download Flarum</span>';
         var bazaar = '<span class="instal1"><span id="bazaarbtn" class="cleanup btn btn-primary btn-lg" role="button">Step 2: Download Bazaar</span></span>';
         var cleanup = '<span id="cleanupbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 3: Start Flarum Installer</span>';
+
+        function getProgress(url) {
+            $.ajax({
+                url: url,
+                data: {ajax: "progress"},
+                type: 'get'
+            })
+                .done(function (data) {
+                    $("#progress").html(data);
+                })
+
+        };
 
         function status(url) {
             timer = setTimeout(function () {
@@ -347,6 +363,9 @@ else {
                 })
                     .done(function (data) {
                         $("#progressdiv").html(window[data]);
+                        if (data === "waiting"){
+                            getProgress(url);
+                        }
                         status(url);
                     })
             }, 5000);
