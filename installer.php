@@ -245,7 +245,7 @@ class Pockethold {
             } elseif ($request == 'bazaar') {
                 echo 'Initiated';
                 chdir("flarumtemp");
-                $this->phcomposer('require flagrow/bazaar --prefer-dist -n -o', 'bazaar');
+                $this->phcomposer('require flagrow/bazaar --prefer-dist --no-progress -n -o', 'bazaar');
             } elseif ($request == 'cleanup') {
                 echo 'Initiated';
                 $this->cleanup();
@@ -253,7 +253,17 @@ class Pockethold {
         } elseif ($request == 'status') {
             echo $status;
         } elseif ($request == 'progress') {
-            echo $this->composerProgress("composer.log");
+            $logfile = "Console output not ready yet";
+            if( file_exists($this->tpath . 'flarum.start' )){
+                $logfile = "flarum.log";
+            }
+            if( file_exists($this->tpath . 'bazaar.start' )){
+                $logfile = "bazaar.log";
+            }
+            if ( $logfile !== "Console output not ready yet"){
+                echo $this->composerProgress($logfile);
+            } else
+             echo $logfile;
         }
     }
     function cleanup() {
@@ -273,7 +283,7 @@ class Pockethold {
      */
     function composerProgress($file){
         $log_file = file_get_contents($this->tpath . $file);
-        $result  = "<pre>" . $log_file . "</pre>";
+        $result  = "<pre id='consoleoutput' style='height: 300px; max-height: 300px; overflow:auto; color:#fff;'>" . $log_file . "</pre>";
         return $result;
     }
 
@@ -319,9 +329,9 @@ else {
                 <p style="max-width: 460px; margin:auto;">Pockethold is a 3rd party no shell Flarum downloader.</p>
 
                 <div id="progressdiv" style="padding-top:2em;">
-                    <p style="max-width: 460px; margin:50px auto auto auto;"><button id="checkingbtn" class="instal1 btn btn-default btn-lg" role="button" disabled>Checking Status <i class="fa fa-cog fa-spin"></i></button></p>
+                    <p style="max-width: 460px; margin:50px auto auto auto;"><button id="checkingbtn" class="instal1 btn btn-default btn-lg" role="button" disabled>Getting Status<i class="fa fa-cog fa-spin"></i></button></p>
                 </div>
-				<div id="progressbar" style="margin-top:10px;background-color: #eceeef;"><div id="progressbar-actual" class="progress-bar" role="progressbar" style="width: 0%;height:1px;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div></div>
+
             </div>
         </div>
     </div>
@@ -335,7 +345,8 @@ else {
         var count = 0;
         var fmsg = "<h2 class='instal1'>Install failed</h2>";
 
-        var waiting = "<button class='instal1 btn btn-default btn-lg' disabled>Working Please wait <i class='fa fa-cog fa-spin'></i></button><div id='progress'></div>";
+        var waiting = "<button class='instal1 btn btn-default btn-lg' disabled>Working Please wait <i class='fa fa-cog fa-spin'></i></button><div style='margin-top: 50px; padding:5px; background: #141414;' id='progress'></div>";
+        var setup = "<button class='instal1 btn btn-default btn-lg' disabled>Getting Composer<i class='fa fa-cog fa-spin'></i></button>";
         var prepare1 = '<span class="instal1"><span id="prepare1btn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Download Composer</span></span>';
 
         var flarum = '<span id="flarumbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Download Flarum</span>';
@@ -353,7 +364,10 @@ else {
                 })
 
         };
-
+        function logScroll() {
+            var d = $('#consoleoutput');
+            d.scrollTop(d.prop("scrollHeight"));
+        }
         function status(url) {
             timer = setTimeout(function () {
                 $.ajax({
@@ -365,6 +379,7 @@ else {
                         $("#progressdiv").html(window[data]);
                         if (data === "waiting"){
                             getProgress(url);
+                            setInterval(logScroll,1000);
                         }
                         status(url);
                     })
@@ -376,7 +391,7 @@ else {
         //On Click Prepare unpack composer
         $(document).ready(function () {
             $(document).on("click", "#prepare1btn", function () {
-                $("#progressdiv").html(waiting);
+                $("#progressdiv").html(setup);
                 return $.post(ajaxurl, {ajax: "prepare1"});
             })
         });
