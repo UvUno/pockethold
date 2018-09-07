@@ -31,9 +31,9 @@ class Pockethold {
 
     /**
      * phlog - For logging things.
-     * @param $type
-     * @param $msg
-     * @param $filename
+     * @param $type - Event type
+     * @param $msg - Log Description
+     * @param $filename - Name of logfile
      */
     public function phlog($type, $msg, $filename)
     {
@@ -45,12 +45,16 @@ class Pockethold {
         file_put_contents($this->tpath . $filename, $log, FILE_APPEND | LOCK_EX);
     }
 
+    /**
+     * phstatus
+     * @return string - Current Status
+     */
     public function phstatus()
     {
 
         $i = "prepare1";
 
-        if ( file_exists($this->tpath . 'vendor/autoload.php')
+        if ( file_exists($this->tpath . 'composer/vendor/autoload.php')
         && file_exists($this->tpath . 'unpack.done') ) {
 
             if ( file_exists($this->tpath . 'bazaar.done' ) ) {
@@ -94,43 +98,17 @@ class Pockethold {
 
     }
 
-    public function getComposer()
+    private function getComposer()
     {
         touch($this->tpath . 'unpack.start');
         if ( !file_exists($this->tpath . 'composer.phar') ) {
             $this->phgetfile('https://getcomposer.org/composer.phar');
         }
         $composer = new Phar($this->tpath . "composer.phar");
-        $composer->extractTo($this->tpath);
+        $composer->extractTo($this->tpath . 'composer/');
         touch($this->tpath . 'unpack.done');
     }
 
-    /**
-     * Count lines of file.
-     * @param $file
-     * @return int
-     */
-    public function phlines ($file)
-    {
-        $lines = 0;
-        $file = fopen( $file, 'r');
-
-        while( !feof( $file) ) {
-
-            fgets($file);
-
-            $lines++;
-        }
-
-        fclose( $file);
-        return $lines;
-    }
-
-    /**
-     * getfile($src, $dest) - downloads a file and saves it on the web server.
-     *
-     * @param $dir
-     */
     function rrmdir($dir)
     {
         if ( is_dir($dir) ) {
@@ -154,7 +132,7 @@ class Pockethold {
      * @param String $dest - Destination of files being moved
      * @return NULL
      */
-    function rmove($src, $dest)
+    private function rmove($src, $dest)
     {
 
         // If source is not a directory stop processing
@@ -181,7 +159,7 @@ class Pockethold {
         unlink($src);
     }
 
-    public function phcomposer($command, $taskname)
+    private function phcomposer($command, $taskname)
     {
         touch($this->tpath . $taskname .'.log');
         touch($this->tpath . $taskname . '.start');
@@ -194,7 +172,7 @@ class Pockethold {
 
         ignore_user_abort(true);
         set_time_limit(1100);
-        require_once($this->tpath . 'vendor/autoload.php');
+        require_once($this->tpath . 'composer/vendor/autoload.php');
 
         $this->phlog('Composer:', 'Starting Create-Project ' . $taskname, 'install.log');
         putenv('COMPOSER_HOME=' . $this->tpath);
@@ -220,7 +198,7 @@ class Pockethold {
         return 'done';
     }
 
-    function listen($request)
+    public function listen($request)
     {
         $allowed = array('status','prepare1','flarum','bazaar','cleanup','log', progress);
         if(!in_array($request,$allowed)) {
@@ -232,7 +210,7 @@ class Pockethold {
         }
     }
 
-    function process($request)
+    public function process($request)
     {
         $status = $this->phstatus();
         if ($request == $status) {
@@ -266,7 +244,8 @@ class Pockethold {
              echo $logfile;
         }
     }
-    function cleanup() {
+
+    private function cleanup() {
 
         $this->rmove($this->ipath . "flarumtemp", $this->ipath);
         //Removes temporary directory
@@ -280,8 +259,9 @@ class Pockethold {
      * composerProgress($file) - Returns amount of finished vendors and the total. Composer output.
      *
      * @param $file
+     * @return string
      */
-    function composerProgress($file){
+    public function composerProgress($file){
         $log_file = file_get_contents($this->tpath . $file);
         $result  = "<pre id='consoleoutput' style='white-space: pre-wrap; text-align:left; height: 300px; max-height: 300px; overflow:auto; color:#fff;'>" . $log_file . "</pre>";
         return $result;
