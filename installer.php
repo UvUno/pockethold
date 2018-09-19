@@ -200,7 +200,7 @@ class Pockethold {
 
     public function listen($request)
     {
-        $allowed = array('status','prepare1','flarum','bazaar','cleanup','log', progress);
+        $allowed = array('status','prepare1','flarum','bazaar','cleanup','log', 'progress');
         if(!in_array($request,$allowed)) {
             $this->phlog('Ajax Blocked:',$request,'ajax.log');
             echo "Invalid";
