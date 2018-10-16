@@ -310,7 +310,7 @@ else {
 
                 <div id="progressdiv" style="margin-top:50px;">
                     <p style="max-width: 460px; margin:50px auto auto auto;">
-                        <button id="checkingbtn" class="instal1 btn btn-default btn-lg" role="button" disabled>Getting Status<i class="fa fa-cog fa-spin"></i></button>
+                        <button id="checkingbtn" class="instal1 btn btn-default btn-lg" role="button" disabled>Getting Status&nbsp;<i class="fa fa-cog fa-spin"></i></button>
                     </p>
                 </div>
 
@@ -327,12 +327,12 @@ else {
         var count = 0;
         var fmsg = "<h2 class='instal1'>Install failed</h2>";
 
-        var waiting = "<button class='instal1 btn btn-default btn-lg' disabled>Working Please wait<i class='fa fa-cog fa-spin'>" +
+        var waiting = "<button class='instal1 btn btn-default btn-lg' disabled>Working Please wait&nbsp;<i class='fa fa-cog fa-spin'>" +
             "</i></button><div class='card' style='margin-top: 50px;'><div class='card-header'>Current Task Log </div>" +
             "<div class='card-body' id='progress' style=' padding:5px; background: #141414;'></div></div>";
 
 
-        var setup = "<button class='instal1 btn btn-default btn-lg' disabled>Getting Composer<i class='fa fa-cog fa-spin'></i></button>";
+        var setup = "<button class='instal1 btn btn-default btn-lg' disabled>Getting Composer&nbsp;<i class='fa fa-cog fa-spin'></i></button>";
         var prepare1 = '<span class="instal1"><span id="prepare1btn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Download Composer</span></span>';
 
         var flarum = '<span id="flarumbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Download Flarum</span>';
@@ -398,7 +398,7 @@ else {
         //On Click Cleanup
         $(document).ready(function () {
             $(document).on("click", "#cleanupbtn", function () {
-                $("#progressdiv").html('<button class="instal1 btn btn-default btn-lg" disabled>Removing Installer<i class="fa fa-cog fa-spin"></i></button>');
+                $("#progressdiv").html('<button class="instal1 btn btn-default btn-lg" disabled>Removing Installer&nbsp;<i class="fa fa-cog fa-spin"></i></button>');
                 return $.post(ajaxurl, {ajax: "cleanup"})
                     .done(function() {
                         window.setTimeout(window.location.href = "./",10000);
