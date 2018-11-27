@@ -102,7 +102,7 @@ class Pockethold {
     {
         touch($this->tpath . 'unpack.start');
         if ( !file_exists($this->tpath . 'composer.phar') ) {
-            $this->phgetfile('https://getcomposer.org/composer.phar');
+            $this->phgetfile('https://github.com/composer/composer/releases/download/1.7.2/composer.phar');
         }
         $composer = new Phar($this->tpath . "composer.phar");
         $composer->extractTo($this->tpath . 'composer/');
