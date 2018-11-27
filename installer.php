@@ -223,7 +223,7 @@ class Pockethold {
             } elseif ($request == 'bazaar') {
                 echo 'Initiated';
                 chdir("flarumtemp");
-                $this->phcomposer('require flagrow/bazaar --prefer-dist --no-progress -n -o', 'bazaar');
+                $this->phcomposer('require "flagrow/bazaar:*" --prefer-dist --no-progress -n -o', 'bazaar');
             } elseif ($request == 'cleanup') {
                 echo 'Initiated';
                 $this->cleanup();
