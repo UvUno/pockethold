@@ -12,10 +12,9 @@
         "<div class='card-body' id='progress' style=' padding:5px; background: #141414;'></div></div>";
 
 
-    var setup = "<button class='instal1 btn btn-default btn-lg' disabled>Getting Composer<i class='fa fa-cog fa-spin'></i></button>";
-    var prepare1 = '<span class="instal1"><span id="prepare1btn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Download Composer</span></span>';
+    var setup = "<button class='instal1 btn btn-default btn-lg' disabled>Getting Composer <i class='fa fa-cog fa-spin'></i></button>";
 
-    var flarum = '<span id="flarumbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Download Flarum</span>';
+    var flarum = '<span id="flarumbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Download Flarum</span>';
     var bazaar = '<span class="instal1"><span id="bazaarbtn" class="cleanup btn btn-primary btn-lg" role="button">Step 2: Download Bazaar</span></span>';
     var cleanup = '<span id="cleanupbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 3: Start Flarum Installer</span>';
 

@@ -1,4 +1,12 @@
-<?
+<?php
+use Composer\Command\CreateProjectCommand;
+use Composer\Command\RequireCommand;
+use Composer\Console\Application;
+use Composer\IO\IOInterface;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Input\StringInput;
+use Symfony\Component\Console\Output\StreamOutput;
+
 class Pockethold {
 
     var $tpath;
@@ -177,8 +185,8 @@ class Pockethold {
                 $this->phcomposer('create-project flarum/flarum ./pockethold/download --stability=beta --prefer-dist --no-progress -n', 'flarum');
             } elseif ($request == 'bazaar') {
                 echo 'Initiated';
-                chdir("flarumtemp");
-                $this->phcomposer('require "flagrow/bazaar:*" ./pockethold/download --prefer-dist --no-progress -n -o', 'bazaar');
+                chdir("./pockethold/download");
+                $this->phcomposer('require "flagrow/bazaar:*" --prefer-dist --no-progress -n -o', 'bazaar');
             } elseif ($request == 'cleanup') {
                 echo 'Initiated';
                 $this->cleanup();
@@ -187,10 +195,10 @@ class Pockethold {
             echo $status;
         } elseif ($request == 'progress') {
             $logfile = "Console output not ready yet";
-            if( file_exists($this->tpath . 'flarum.start' )){
+            if( file_exists($this->lpath . 'flarum.start' )){
                 $logfile = "flarum.log";
             }
-            if( file_exists($this->tpath . 'bazaar.start' )){
+            if( file_exists($this->lpath . 'bazaar.start' )){
                 $logfile = "bazaar.log";
             }
             if ( $logfile !== "Console output not ready yet"){
@@ -202,11 +210,11 @@ class Pockethold {
 
     private function cleanup() {
 
-        $this->rmove($this->tpatch . "download/", $this->ipath);
-        $this->rmove($this->tpatch . "3rdparty/flarum/", $this->ipath);
-        //Removes temporary directory
+        $this->rmove($this->tpath . "download/", $this->ipath);
+        $this->rmove($this->tpath . "3rdparty/flarum/", $this->ipath);
+        $this->rrmdir($this->ipath . 'public/');
+        unlink($this->ipath . "installer.php");
         $this->rrmdir($this->tpath);
-        //Removes installer.php
         echo "Complete";
     }
 
