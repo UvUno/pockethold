@@ -10,6 +10,7 @@ class Pockethold {
         //Add validation here of correct URL here?
         $this->tpath = $temppath;
         $this->ipath = $installpath;
+        $this->lpath = $temppath . 'log/';
         if ( !file_exists($this->tpath) )
         {
             mkdir($this->tpath);
@@ -29,7 +30,7 @@ class Pockethold {
         //combine message
         $log = $ltime . ': ' . $type . ' ' . $msg . "\n";
         //Insert into Log
-        file_put_contents($this->tpath . $filename, $log, FILE_APPEND | LOCK_EX);
+        file_put_contents($this->lpath . $filename, $log, FILE_APPEND | LOCK_EX);
     }
 
     /**
@@ -39,32 +40,26 @@ class Pockethold {
     public function phstatus()
     {
 
-        $i = "prepare1";
+        $i = "flarum";
 
-        if ( file_exists($this->tpath . 'composer/vendor/autoload.php')
-        && file_exists($this->tpath . 'unpack.done') ) {
-
-            if ( file_exists($this->tpath . 'bazaar.done' ) ) {
+        if ( file_exists($this->tpath . '3rdparty/composer/vendor/autoload.php') ) {
+            $i = "flarum";
+            if ( file_exists($this->lpath . 'bazaar.done' ) ) {
                 $i = "cleanup";
                 return $i;
             }
-            if ( file_exists($this->tpath . 'bazaar.start' ) ) {
+            if ( file_exists($this->lpath . 'bazaar.start' ) ) {
                 $i = "waiting";
                 return $i;
             }
-            if ( file_exists($this->tpath . 'flarum.done' ) ) {
+            if ( file_exists($this->lpath . 'flarum.done' ) ) {
                 $i = "bazaar";
                 return $i;
             }
-            if ( file_exists($this->tpath . 'flarum.start' ) ) {
+            if ( file_exists($this->lpath . 'flarum.start' ) ) {
                 $i = "waiting";
                 return $i;
             }
-            if ( file_exists($this->tpath . 'unpack.done' ) ) {
-                $i = "flarum";
-                return $i;
-            }
-
         }
         return $i;
     }
@@ -121,8 +116,8 @@ class Pockethold {
 
     private function phcomposer($command, $taskname)
     {
-        touch($this->tpath . $taskname .'.log');
-        touch($this->tpath . $taskname . '.start');
+        touch($this->lpath . $taskname .'.log');
+        touch($this->lpath . $taskname . '.start');
         $ini_get_option_details = ini_get_all();
         if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
             ini_set('memory_limit', '1G');
@@ -149,12 +144,12 @@ class Pockethold {
         $application->setAutoExit(false);
         $input = new StringInput($command);
         // Trying to output
-        $output = new StreamOutput(fopen($this->tpath . $taskname .'.log', 'a', false));
+        $output = new StreamOutput(fopen($this->lpath . $taskname .'.log', 'a', false));
 
         $application->run($input, $output);
         unset($input);
         unset($application);
-        touch($this->tpath . $taskname . '.done');
+        touch($this->lpath . $taskname . '.done');
         return 'done';
     }
 
@@ -207,11 +202,11 @@ class Pockethold {
 
     private function cleanup() {
 
-        $this->rmove($this->ipath . "flarumtemp", $this->ipath);
+        $this->rmove($this->tpatch . "download/", $this->ipath);
+        $this->rmove($this->tpatch . "3rdparty/flarum/", $this->ipath);
         //Removes temporary directory
         $this->rrmdir($this->tpath);
         //Removes installer.php
-        unlink($this->ipath . 'installer.php');
         echo "Complete";
     }
 
@@ -222,7 +217,7 @@ class Pockethold {
      * @return string
      */
     public function composerProgress($file){
-        $log_file = file_get_contents($this->tpath . $file);
+        $log_file = file_get_contents($this->lpath . $file);
         $result  = "<pre id='consoleoutput' style='white-space: pre-wrap; text-align:left; height: 300px; max-height: 300px; overflow:auto; color:#fff;'>" . $log_file . "</pre>";
         return $result;
     }
