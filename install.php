@@ -10,7 +10,7 @@ if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
     {
         define('ABSPATH', dirname(__FILE__) . '/');
     }
-    $tmppath = (ABSPATH . 'pockethold//');
+    $tmppath = (ABSPATH . 'pockethold/');
 
     // Listen for Ajax Calls
     $ear = new Pockethold(ABSPATH, $tmppath);
