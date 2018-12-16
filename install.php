@@ -1,12 +1,11 @@
 <?php
-
 /*
 This File is part of the Pockethold 3rdparty flarum installer.
 */
-require_once("pockethold/loader.php");
-// Run Installer
 
+// Run Installer
 if(isset($_REQUEST['ajax']) && !empty($_REQUEST["ajax"])) {
+    require_once("pockethold/loader.php");
     if ( !defined('ABSPATH') )
     {
         define('ABSPATH', dirname(__FILE__) . '/');
@@ -35,7 +34,7 @@ else {
             <div class="container text-center">
 
                 <img style="margin: auto;" class="img-responsive" alt="Pockethold"
-                     src="pockethold\pockethold\assets\logo.png"/>
+                     src="pockethold\assets\logo.png"/>
                 <p style="max-width: 460px; margin:auto;">Pockethold is a 3rd party no shell Flarum downloader.</p>
 
                 <div id="progressdiv" style="margin-top:50px;">
