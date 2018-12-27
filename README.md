@@ -11,7 +11,8 @@ Requirements.
 3. Rougly 3 - 5 minutes of your time. 
 
 Usage:
-Upload installer.php where you want Flarum to be installed. 
-Visit the the default: `yoururl.com/installer.php` and follow the instructions. 
+Unzip and upload content of latest release. [latest relase](https://github.com/Pockethold/pockethold/releases/latest)
+Make sure not to download the source, but the actual release. 
+Visit: `yoururl.com/installer.php` and follow the instructions. 
 
 Pockethold will redirect you upon completion.
