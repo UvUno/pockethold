@@ -1,6 +1,6 @@
 <?php
 
-namespace Pockethold\Api;
+namespace Pockethold;
 use Pockethold\Pockethold;
 
 class Api extends Pockethold {
@@ -8,17 +8,19 @@ class Api extends Pockethold {
     public function listen($ear) {
         $allowed = array('status','prepare1','flarum','bazaar','cleanup','log', 'progress');
         if(!in_array($ear,$allowed)) {
-            $this->phlog('Ajax Blocked:',$request,'ajax.log');
-            echo "Invalid";
+            parent::phlog('Ajax Blocked:',$request,'ajax.log');
+            return "Invalid";
         } else {
-            $this->phlog('Ajax Allowed:',$request,'ajax.log');
+            parent::phlog('Ajax Allowed:',$request,'ajax.log');
             $this->process($request);
         }
     }
 
-    public function process(){
+    public function process($process){
 
+      $output = "Sucess";
 
+      return $output;
 
     }
 

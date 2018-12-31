@@ -1,6 +1,6 @@
 <?php
 
-namespace Pockethold\Pockethold;
+namespace Pockethold;
 
 use Composer\Command\CreateProjectCommand;
 use Composer\Command\RequireCommand;
