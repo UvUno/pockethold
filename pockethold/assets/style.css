@@ -1,0 +1,149 @@
+body, html{
+	padding:0; 
+	margin:0;
+	font-family: "Open Sans",Arial,sans-serif;
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1.7em;
+}	
+	
+.header {
+	height: 80px; width: 100%;  box-shadow: 0 1px 0 rgba(0,0,0,.1);
+	line-height: 23px;
+}
+
+.container {
+	width: 80%; 
+	margin: auto; 
+	max-width:1080px; 
+	position: relative;
+	text-align: left;
+}
+
+.logo_container {
+	width: 100%;
+	height: 80px;
+	line-height: 23px;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+}
+
+.logo_helper {
+	
+	display:inline-block; 
+	height: 100%; 
+	vertical-align: middle;
+	width:0;
+}
+
+.logo_container img {
+	vertical-align: middle;
+	display: inline-block;
+	float: none;
+	max-height: 54%;
+	margin-bottom: 0;
+	height: auto;
+}
+
+.footer {
+	background-color: #222;
+	position:absolute;
+	bottom:0;
+	width:100%;
+	min-height:244px;  
+}
+
+.footer-widgets {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	background: 0 0;
+	font-size: 100%;
+	vertical-align: baseline;
+	-webkit-text-size-adjust: 100%;
+	-ms-text-size-adjust: 100%;
+	display: flex;
+	flex-wrap: wrap;
+	align-content: stretch;
+	padding: 6% 0 0;
+}
+
+.footer-widget {
+	min-width: 225.25px;
+	color: #fff;
+	width: 20.875%;
+	margin-right: 5.5%;
+    margin-bottom: 5.5%;
+}
+
+.footer-widget h4{
+
+	color: #2ea3f2;
+	font-size: 18px;
+	font-weight: 500;
+	line-height: 1em;
+	margin: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: 0 0;
+    vertical-align: baseline;
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+	padding-bottom: 10px;
+
+}
+
+ul, li {
+	margin-top:0px;
+	margin-bottom: .5em;
+	list-style: none;
+	position: relative;
+	padding-left:0px;
+}
+
+.footer-widget li::before {
+	border-width: 3px;
+	border-style: solid;
+	-webkit-border-radius: 3px;
+	-moz-border-radius: 3px;
+	border-radius: 3px;
+	content: "";
+	border-color: #2ea3f2;
+	position: absolute;
+	top: 9px;
+	left: 0;
+}
+
+.footer-widget li {
+	margin-bottom: .5em;
+	position: relative;
+    padding-left: 14px;
+}
+
+.footer-widget a {
+	text-decoration: none;
+	color: #fff;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	background: 0 0;
+	font-size: 100%;
+	vertical-align: baseline;
+	-webkit-text-size-adjust: 100%;
+	-ms-text-size-adjust: 100%;	
+}
+
+.footer-widget p {
+	padding-bottom: 0;
+	font-size: 14px;
+}
+
+.zero-right {
+	margin-right:0px !important;
+}
+
+	

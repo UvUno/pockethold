@@ -1,0 +1,27 @@
+{
+  "name": "pockethold",
+  "version": "1.0.0",
+  "description": "<img alt=\"Pockethold\" src=\"https://i.imgur.com/k5tMKCG.png\">",
+  "main": "src/js/pockethold.js",
+  "scripts": {
+     "start": "webpack src/js/pockethold.js --output pockethold/assets/pockethold.js -d --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andreherberth/pockethold.git"
+  },
+  "keywords": [],
+  "author": "Andre Herberth",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Pockethold/pockethold/issues"
+  },
+  "homepage": "https://github.com/Pockethold/pockethold#readme",
+  "dependencies": {
+    "mithril": "^1.1.6"
+  },
+  "devDependencies": {
+    "webpack": "^4.28.2",
+    "webpack-cli": "^3.1.2"
+  }
+}

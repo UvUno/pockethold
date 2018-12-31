@@ -1,3 +1,5 @@
 .idea/modules.xml
 .idea/workspace.xml
 .idea/pockethold.iml
+node_modules
+tests
