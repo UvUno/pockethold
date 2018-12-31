@@ -1,4 +1,7 @@
 <?php
+
+namespace Pockethold\Pockethold;
+
 use Composer\Command\CreateProjectCommand;
 use Composer\Command\RequireCommand;
 use Composer\Console\Application;
@@ -160,7 +163,7 @@ class Pockethold {
         touch($this->lpath . $taskname . '.done');
         return 'done';
     }
-
+/*
     public function listen($request)
     {
         $allowed = array('status','prepare1','flarum','bazaar','cleanup','log', 'progress');
@@ -207,7 +210,7 @@ class Pockethold {
              echo $logfile;
         }
     }
-
+*/
     private function cleanup() {
 
         $this->rmove($this->tpath . "download/", $this->ipath);
