@@ -4,7 +4,7 @@
   "description": "<img alt=\"Pockethold\" src=\"https://i.imgur.com/k5tMKCG.png\">",
   "main": "src/js/pockethold.js",
   "scripts": {
-     "start": "webpack src/js/pockethold.js --output pockethold/assets/pockethold.js -d --watch"
+     "start": "webpack src/js/pockethold.js --output pockethold/assets/pockethold.js --watch"
   },
   "repository": {
     "type": "git",

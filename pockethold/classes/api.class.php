@@ -6,14 +6,16 @@ use Pockethold\Pockethold;
 class Api extends Pockethold {
 
     public function listen($ear) {
+        $percieved = null;
         $allowed = array('status','prepare1','flarum','bazaar','cleanup','log', 'progress');
         if(!in_array($ear,$allowed)) {
             parent::phlog('Ajax Blocked:',$request,'ajax.log');
-            return "Invalid";
+            $percieved = "Invalid";
         } else {
             parent::phlog('Ajax Allowed:',$request,'ajax.log');
-            $this->process($request);
+            $percieved = $this->process($request);
         }
+        echo $percieved;
     }
 
     public function process($process){

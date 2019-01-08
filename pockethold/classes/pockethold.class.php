@@ -233,4 +233,20 @@ class Pockethold {
         return $result;
     }
 
+    /**
+     * reqCheck - Returns array
+     *
+     * @return array
+     **/
+    public function reqCheck() {
+
+
+        $req = array(
+          "PHP 7.1<" => "",
+
+        )
+
+        return $req;
+    }
+
 }

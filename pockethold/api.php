@@ -13,4 +13,4 @@ $tmppath = (ABSPATH);
 
 $pockethold = new Pockethold(ABSPATH, $tmppath);
 $pockethold -> api = new api(ABSPATH, $tmppath);
-echo $pockethold -> api -> listen($_REQUEST['ajax']);
+$pockethold -> api -> listen($_REQUEST['ajax']);
