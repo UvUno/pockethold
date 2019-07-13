@@ -23,6 +23,10 @@ class Pockethold {
         {
             mkdir($this->tpath);
         }
+        if ( !file_exists($this->lpath) )
+        {
+            mkdir($this->lpath);
+        }
     }
 
     /**
