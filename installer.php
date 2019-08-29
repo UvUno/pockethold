@@ -35,7 +35,7 @@ else {
         <div class="jumbotron" style="background-color: transparent;">
 
           <?php
-          if (version_compare(phpversion(), '7.1', '<')) {
+          if (!version_compare(phpversion(), '7.1.0', '>=')) {
             ?>
             <div class="container text-center">
 
