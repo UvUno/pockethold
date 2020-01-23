@@ -25,7 +25,7 @@
             type: 'get'
         })
             .done(function (data) {
-                $("#progress").html('<pre id=\'consoleoutput\' style=\'white-space: pre-wrap; text-align:left; height: 300px; max-height: 300px; overflow:auto; color:#fff;\'>'data'</pre>');
+                $("#progress").html('<pre id=\'consoleoutput\' style=\'white-space: pre-wrap; text-align:left; height: 300px; max-height: 300px; overflow:auto; color:#fff;\'>' + data + '</pre>');
             })
 
     };
