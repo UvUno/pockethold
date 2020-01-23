@@ -238,7 +238,7 @@ class Pockethold {
         if ( !file_exists($this->lpath . $file) ) {
           return 'Waiting for Logfile';
         }
-        $log_file = file_get_contents($this->lpath . $file)
+        $log_file = file_get_contents($this->lpath . $file);
         return $log_file;
     }
 
