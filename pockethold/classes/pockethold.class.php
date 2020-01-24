@@ -172,7 +172,7 @@ class Pockethold {
 
     public function listen($request)
     {
-        $allowed = array('status','prepare1','flarum','bazaar','cleanup','log', 'progress');
+        $allowed = array('status','prepare1','install','cleanup','log','progress');
         if(!in_array($request,$allowed)) {
             $this->phlog('Ajax Blocked:',$request,'ajax.log');
             echo "Invalid";
@@ -189,13 +189,9 @@ class Pockethold {
             if ($request == 'prepare1') {
                 echo 'Initiated';
                 $this->getComposer();
-            } elseif ($request == 'flarum') {
+            } elseif ($request == 'install') {
                 echo 'Initiated';
-                $this->phcomposer('create-project flarum/flarum ./pockethold/download --stability=beta --prefer-dist --no-progress -n', 'flarum');
-            } elseif ($request == 'bazaar') {
-                echo 'Initiated';
-                chdir("./pockethold/download");
-                $this->phcomposer('require "flagrow/bazaar:*" --prefer-dist --no-progress -n -o', 'bazaar');
+                $this->phcomposer('install --stability=beta --prefer-dist --no-progress --no-interaction', 'install');
             } elseif ($request == 'cleanup') {
                 echo 'Initiated';
                 $this->cleanup();
@@ -238,7 +234,7 @@ class Pockethold {
         if ( !file_exists($this->lpath . $file) ) {
           return 'Waiting for Logfile';
         }
-        $log_file = file_get_contents($this->lpath . $file)
+        $log_file = file_get_contents($this->lpath . $file);
         return $log_file;
     }
 
