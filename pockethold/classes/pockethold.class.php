@@ -55,14 +55,10 @@ class Pockethold {
         $i = "flarum";
 
         if ( file_exists($this->tpath . '3rdparty/composer/vendor/autoload.php') ) {
-            $i = "flarum";
-            if ( file_exists($this->lpath . 'bazaar.done' ) ) {
-                $i = "cleanup";
-                return $i;
-            }
-            if ( file_exists($this->lpath . 'bazaar.start' ) ) {
-                $i = "waiting";
-                return $i;
+            // $i = "flarum";
+            $i = "prepare";
+            if ( file_exists($this->lpath . 'flarum.done' ) ) {
+                $i = "flarum";
             }
             if ( file_exists($this->lpath . 'flarum.done' ) ) {
                 $i = "bazaar";
@@ -146,7 +142,7 @@ class Pockethold {
         set_time_limit(1100);
         require_once($this->tpath . '3rdparty/composer/vendor/autoload.php');
 
-        $this->phlog('Composer:', 'Starting Create-Project ' . $taskname, 'install.log');
+        $this->phlog('Composer:', 'Started ' . $taskname, 'install.log');
         putenv('COMPOSER_HOME=' . $this->tpath);
         putenv('COMPOSER_NO_INTERACTION=true');
         putenv('COMPOSER_PROCESS_TIMEOUT=1000');
@@ -186,7 +182,7 @@ class Pockethold {
     {
         $status = $this->phstatus();
         if ($request == $status) {
-            if ($request == 'prepare1') {
+            if ($request == 'prepare') {
                 echo 'Initiated';
                 $this->getComposer();
             } elseif ($request == 'install') {
@@ -214,8 +210,13 @@ class Pockethold {
     }
 
     private function cleanup() {
-
-        $this->rmove($this->tpath . "download/", $this->ipath);
+        /*
+        // Workign on error messages.
+        if (!file_exists(__DIR__ . '/vendor/autoload.php')) {
+          return 'Flarum not downloaded correctly';
+        }
+        */
+        // $this->rmove($this->tpath . "download/", $this->ipath);
         $this->rmove($this->tpath . "3rdparty/flarum/", $this->ipath);
         $this->rrmdir($this->ipath . 'public/');
         unlink($this->ipath . "installer.php");

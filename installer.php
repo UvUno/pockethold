@@ -63,7 +63,8 @@ else {
           <?php } ?>
         </div>
     </div>
-    <script type="text/javascript" src="pockethold/assets/pockethold.js"></script>
+    <script type="text/javascript" src="pockethold/assets/pockethold.variables.js"></script>
+    <script type="text/javascript" src="pockethold/assets/pockethold.fetch.js"></script>
     </body>
     </html>
 
