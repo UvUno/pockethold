@@ -49,8 +49,24 @@ class Pockethold {
      * phstatus
      * @return string - Current Status
      */
+
+    public function phresponse($status, $response, $addition1 = NULL, $addition2 = NULL){
+      $preparray = array("status" => $status,
+                  "response" => $response,
+                  "addition1" => $addition1,
+                  "addition2" => $addition2);
+      return $preparray;
+    }
+
+
     public function phstatus()
     {
+
+if(!file_exists($this->tpath . '3rdparty/composer/vendor/autoload.php')) {
+  return $this->phresponse('Error', 'Composer is missing. Verify if Pockethold is uploaded in it\'s entirety.', NULL, NULL);
+}
+
+
 
         $i = "flarum";
 
@@ -60,12 +76,8 @@ class Pockethold {
             if ( file_exists($this->lpath . 'flarum.done' ) ) {
                 $i = "flarum";
             }
-            if ( file_exists($this->lpath . 'flarum.done' ) ) {
-                $i = "bazaar";
-                return $i;
-            }
             if ( file_exists($this->lpath . 'flarum.start' ) ) {
-                $i = "waiting";
+                $i = "installing";
                 return $i;
             }
         }
@@ -168,13 +180,13 @@ class Pockethold {
 
     public function listen($request)
     {
-        $allowed = array('status','prepare1','install','cleanup','log','progress');
+        $allowed = array('status','prepare1','install','cleanup');
         if(!in_array($request,$allowed)) {
             $this->phlog('Ajax Blocked:',$request,'ajax.log');
-            echo "Invalid";
+
         } else {
-            $this->phlog('Ajax Allowed:',$request,'ajax.log');
-            $this->process($request);
+
+            $this->process();
         }
     }
 
@@ -183,8 +195,7 @@ class Pockethold {
         $status = $this->phstatus();
         if ($request == $status) {
             if ($request == 'prepare') {
-                echo 'Initiated';
-                $this->getComposer();
+
             } elseif ($request == 'install') {
                 echo 'Initiated';
                 $this->phcomposer('install --stability=beta --prefer-dist --no-progress --no-interaction', 'install');
@@ -193,19 +204,9 @@ class Pockethold {
                 $this->cleanup();
             }
         } elseif ($request == 'status') {
-            echo $status;
-        } elseif ($request == 'progress') {
-            $logfile = "Console output not ready yet";
-            if( file_exists($this->lpath . 'flarum.start' )){
-                $logfile = "flarum.log";
-            }
-            if( file_exists($this->lpath . 'bazaar.start' )){
-                $logfile = "bazaar.log";
-            }
-            if ( $logfile !== "Console output not ready yet"){
-                echo $this->composerProgress($logfile);
-            } else
-             echo $logfile;
+            header('Content-Type: application/json;charset=utf-8');
+            echo json_encode($this->phstatus());
+
         }
     }
 
@@ -238,5 +239,24 @@ class Pockethold {
         $log_file = file_get_contents($this->lpath . $file);
         return $log_file;
     }
+
+   public function checkRequirements() {
+      /*
+      Apache (with mod_rewrite enabled) or Nginx
+      PHP 7.1+ with the following extensions: curl, dom, gd, json, mbstring, openssl, pdo_mysql, tokenizer, zip
+      MySQL 5.6+ or MariaDB 10.0.5+
+
+
+      https://github.com/PrestaShop/php-ps-info
+      */
+
+
+     function_exists('curl_version'); // Check Curl
+     class_exists('DOMDocument'); // Check Dom
+     function_exists('gd_info'); // CheckGD
+     function_exists('json_encode'); // Check Json
+
+
+   }
 
 }

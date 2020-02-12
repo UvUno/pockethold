@@ -5,35 +5,34 @@
 
     */
     //Run on first visit/page refresh
+
+    /**
+     * initFunction - Run on pageload
+     */
     function initFunction() {
-        const statusreply = await fetch(fetchurl + '?ajax=status');
 
-        if (statusreply.status = 'prepare') {
-          //  block of code to be executed if condition1 is true
-        } else if (statusreply.status = 'waiting') {
-          //  block of code to be executed if the condition1 is false and condition2 is true
-        } else if (statusreply.status = 'cleanup') {
-          //  output cleanup button
-        } else if (statusreply.status = 'reqnotmet'){
-          // Out put what fails
-          // Output Download logs for issue creation
-        } else {
+      wretch(fetchurl + '?ajax=status')
+        .get()
+        .notFound(error => { /* ... */ })
+        .unauthorized(error => { /* ... */ })
+        .error(418, error => { /* ... */ })
+        .json(json => {
+
+          if (response.status = 'prepare') {
+            //  block of code to be executed if condition1 is true
+          } else if (response.status = 'waiting') {
+            //  block of code to be executed if the condition1 is false and condition2 is true
+          } else if (response.status = 'cleanup') {
+            //  output cleanup button
+          } else if (response.status = 'reqnotmet'){
+            // Out put what fails
+            // Output Download logs for issue creation
+          } else {
 
 
-        }
+          }
 
-
-    }
-    //Run when status is 'waiting'
-    function waitingFunction() {
-
-    }
-    //run when status is install
-    function installFunction() {
-
-    }
-    function cleanupFunction() {
-
+        })
     }
 
 

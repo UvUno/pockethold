@@ -63,6 +63,7 @@ else {
           <?php } ?>
         </div>
     </div>
+    <script type="text/javascript" src="https://unpkg.com/wretch@1.7.1/dist/bundle/wretch.js"></script>
     <script type="text/javascript" src="pockethold/assets/pockethold.variables.js"></script>
     <script type="text/javascript" src="pockethold/assets/pockethold.fetch.js"></script>
     </body>
