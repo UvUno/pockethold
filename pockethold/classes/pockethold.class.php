@@ -45,12 +45,8 @@ class Pockethold {
         file_put_contents($this->lpath . $filename, $log, FILE_APPEND | LOCK_EX);
     }
 
-    /**
-     * phstatus
-     * @return string - Current Status
-     */
-
-    public function phresponse($status, $response, $addition1 = NULL, $addition2 = NULL){
+    public function phresponse($status, $response, $addition1 = NULL, $addition2 = NULL)
+    {
       $preparray = array("status" => $status,
                   "response" => $response,
                   "addition1" => $addition1,
@@ -58,13 +54,16 @@ class Pockethold {
       return $preparray;
     }
 
-
+    /**
+     * phstatus
+     * @return string - Current Status
+     */
     public function phstatus()
     {
 
-if(!file_exists($this->tpath . '3rdparty/composer/vendor/autoload.php')) {
-  return $this->phresponse('Error', 'Composer is missing. Verify if Pockethold is uploaded in it\'s entirety.', NULL, NULL);
-}
+        if(!file_exists($this->tpath . '3rdparty/composer/vendor/autoload.php')) {
+          return $this->phresponse('Error', 'Composer is missing. Verify if Pockethold is uploaded in it\'s entirety.', NULL, NULL);
+        }
 
 
 
@@ -137,7 +136,13 @@ if(!file_exists($this->tpath . '3rdparty/composer/vendor/autoload.php')) {
         }
         unlink($src);
     }
-
+    /**
+     * phcomposer - Recursively move files from one directory to another
+     *
+     * @param String $command - Composer command to be run
+     * @param String $taskname - Name of task. Used for log output
+     * @return NULL
+     */
     private function phcomposer($command, $taskname)
     {
         touch($this->lpath . $taskname .'.log');
@@ -178,6 +183,7 @@ if(!file_exists($this->tpath . '3rdparty/composer/vendor/autoload.php')) {
         return 'done';
     }
 
+
     public function listen($request)
     {
         $allowed = array('status','prepare1','install','cleanup');
@@ -210,7 +216,8 @@ if(!file_exists($this->tpath . '3rdparty/composer/vendor/autoload.php')) {
         }
     }
 
-    private function cleanup() {
+    private function cleanup()
+    {
         /*
         // Workign on error messages.
         if (!file_exists(__DIR__ . '/vendor/autoload.php')) {
@@ -231,7 +238,8 @@ if(!file_exists($this->tpath . '3rdparty/composer/vendor/autoload.php')) {
      * @param $file
      * @return string
      */
-    public function composerProgress($file){
+    public function composerProgress($file)
+    {
 
         if ( !file_exists($this->lpath . $file) ) {
           return 'Waiting for Logfile';
@@ -240,7 +248,8 @@ if(!file_exists($this->tpath . '3rdparty/composer/vendor/autoload.php')) {
         return $log_file;
     }
 
-   public function checkRequirements() {
+    public function checkRequirements()
+    {
       /*
       Apache (with mod_rewrite enabled) or Nginx
       PHP 7.1+ with the following extensions: curl, dom, gd, json, mbstring, openssl, pdo_mysql, tokenizer, zip
@@ -250,13 +259,27 @@ if(!file_exists($this->tpath . '3rdparty/composer/vendor/autoload.php')) {
       https://github.com/PrestaShop/php-ps-info
       */
 
+      //Control if code is accurate enough.
+      $vphp = phpversion('tidy');
 
-     function_exists('curl_version'); // Check Curl
-     class_exists('DOMDocument'); // Check Dom
-     function_exists('gd_info'); // CheckGD
-     function_exists('json_encode'); // Check Json
+       $reqcheck = array(
+        "PHP" => $vphp,
+        "Curl" => function_exists('curl_version'),
+        "DOM" => class_exists('DOMDocument'),
+        "GD" => function_exists('gd_info'),
+        "JSON" => function_exists('json_encode'),
+        "MBSTRING" => function_exists('mb_check_encoding'),
+        "OPENSSL" => extension_loaded('openssl'),
+        "PDO_MYSQL" => extension_loaded('pdo_mysql'),
+        "TOKENIZER" => function_exists('token_get_all'),
+        "ZIP" => function_exists('zip_open'),
+    );
 
+    //
+    return $reqcheck;
 
    }
+
+
 
 }

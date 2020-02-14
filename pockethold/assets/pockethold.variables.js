@@ -16,3 +16,4 @@
 
     var flarum = '<span id="flarumbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 1: Download Flarum</span>';
     var cleanup = '<span id="cleanupbtn" class="instal1 btn btn-primary btn-lg" role="button">Step 2: Start Flarum Installer</span>';
+    var notpossible = '<span>Error: Server requirements not met</span><table></table>';

@@ -33,34 +33,19 @@ else {
     <body>
     <div class="container">
         <div class="jumbotron" style="background-color: transparent;">
-
-          <?php
-          if (!version_compare(phpversion(), '7.1.0', '>=')) {
-            ?>
-            <div class="container text-center">
-
-                <img style="margin: auto;" class="img-responsive" alt="Pockethold" src="pockethold/assets/logo.png"/>
-                <p style="max-width: 460px; margin:auto;">Pockethold is a 3rd party no shell Flarum downloader.</p>
-                <div class="alert alert-danger" role="alert">Flarum requires PHP 7.1 or greater. Your versions is <?php echo phpversion(); ?></div>
-
-            </div>
-            <?php
-          } else {
-          ?>
             <div class="container text-center">
 
                 <img style="margin: auto;" class="img-responsive" alt="Pockethold"
                      src="pockethold/assets/logo.png"/>
                 <p style="max-width: 460px; margin:auto;">Pockethold is a 3rd party no shell Flarum downloader.</p>
 
+
                 <div id="progressdiv" style="margin-top:50px;">
                     <p style="max-width: 460px; margin:50px auto auto auto;">
                         <button id="checkingbtn" class="instal1 btn btn-default btn-lg" role="button" disabled>Getting Status<i class="fa fa-cog fa-spin"></i></button>
                     </p>
                 </div>
-
             </div>
-          <?php } ?>
         </div>
     </div>
     <script type="text/javascript" src="https://unpkg.com/wretch@1.7.1/dist/bundle/wretch.js"></script>

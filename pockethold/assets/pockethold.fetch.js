@@ -21,12 +21,25 @@
           if (response.status = 'prepare') {
             //  block of code to be executed if condition1 is true
           } else if (response.status = 'waiting') {
-            //  block of code to be executed if the condition1 is false and condition2 is true
+            //  block of code to be executed if the condition1 is false and condition2 is true.
+            $("#progressdiv").html(waiting);
+            getProgress(url);
+            setTimeout(logScroll, 1000 );
+            setTimeout(initFunction, 10000 );
+
           } else if (response.status = 'cleanup') {
+            $("#progressdiv").html(cleanup);
             //  output cleanup button
           } else if (response.status = 'reqnotmet'){
             // Out put what fails
             // Output Download logs for issue creation
+            $("#progressdiv").html(notpossible);
+            //Not going to work. Need to work on the JSON parsing...
+            let table = document.querySelector("table");
+            let data = Object.keys(resonse[0]);
+            generateTable(table, mountains); // generate the table first
+            generateTableHead(table, data); // then the head
+
           } else {
 
 
@@ -35,37 +48,40 @@
         })
     }
 
+    /*
+    Source gotten from: https://www.valentinog.com/blog/html-table/
+    */
+    function generateTableHead(table, data) {
+      let thead = table.createTHead();
+      let row = thead.insertRow();
+      for (let key of data) {
+        let th = document.createElement("th");
+        let text = document.createTextNode(key);
+        th.appendChild(text);
+        row.appendChild(th);
+      }
+    }
+    /*
+    Source gotten from: https://www.valentinog.com/blog/html-table/
+    */
+    function generateTable(table, data) {
+      for (let element of data) {
+        let row = table.insertRow();
+        for (key in element) {
+          let cell = row.insertCell();
+          let text = document.createTextNode(element[key]);
+          cell.appendChild(text);
+        }
+      }
+    }
+
+
 
 
 
     /*
-    function status(url) {
-      await statusreply fetch(fetchurl + '?ajax=status')
-        timer = setTimeout(function () {
-          fetch(fetchurl + '?ajax=status')
-            .then(data)
-            .then(function (data) {
-                    $("#progressdiv").html(window[data]);
-                    if (data === "waiting"){
-                        getProgress(url);
-                        setInterval(logScroll,1000);
-                    }
-                    status(url);
-                })
-        }, 5000);
-    };
-
-    i
-
-    fetch(fetchurl + '?ajax=status')
-      .then((response) => {
-        return response.json();
-      })
-      .then((myJson) => {
-        console.log(myJson);
-      });
-
-
+    Turn into JQUERY less code soon.
+    */
 
     function getProgress(url) {
         $.ajax({
@@ -83,49 +99,7 @@
         d.scrollTop(d.prop("scrollHeight"));
     }
 
-    /*
-    function status(url) {
-        timer = setTimeout(function () {
-            $.ajax({
-                url: url,
-                data: {ajax: "status"},
-                type: 'get'
-            })
-                .done(function (data) {
-                    $("#progressdiv").html(window[data]);
-                    if (data === "waiting"){
-                        getProgress(url);
-                        setInterval(logScroll,1000);
-                    }
-                    status(url);
-                })
-        }, 5000);
-    };
-    */
-
-    // Runs at startup.
-    setInterval(status(ajaxurl),5000);
-
-    //Prepare Button Click Events
-    $(document).ready(function () {
-      document.getElementById("#prepare1btn").addEventListener("click", getUIContent(prepare1));
-      document.getElementById("#flarumbtn").addEventListener("click", getUIContent(install));
-      document.getElementById("#cleanupbtn").addEventListener("click", getUIContent(waiting));
-    });
-
-
-    //Update UI elements
-    function getUIContent(uiElement, ajaxRequest) {
-      document.getElementById("#progressdiv").innerHTML = uiElement;
-      return fetch(ajaxurl+'?ajax='+ajaxRequest) .then(
-        function(response) {
-
-        }
-
-      )
-
-    }
-
+    //On Click Prepare unpack composer
     $(document).ready(function () {
         $(document).on("click", "#prepare1btn", function () {
             $("#progressdiv").html(setup);
