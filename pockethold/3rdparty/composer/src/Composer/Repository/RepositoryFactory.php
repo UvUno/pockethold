@@ -16,7 +16,8 @@ use Composer\Factory;
 use Composer\IO\IOInterface;
 use Composer\Config;
 use Composer\EventDispatcher\EventDispatcher;
-use Composer\Util\RemoteFilesystem;
+use Composer\Util\HttpDownloader;
+use Composer\Util\ProcessExecutor;
 use Composer\Json\JsonFile;
 
 
@@ -36,7 +37,7 @@ public static function configFromString(IOInterface $io, Config $config, $reposi
 if (0 === strpos($repository, 'http')) {
 $repoConfig = array('type' => 'composer', 'url' => $repository);
 } elseif ("json" === pathinfo($repository, PATHINFO_EXTENSION)) {
-$json = new JsonFile($repository, Factory::createRemoteFilesystem($io, $config));
+$json = new JsonFile($repository, Factory::createHttpDownloader($io, $config));
 $data = $json->read();
 if (!empty($data['packages']) || !empty($data['includes']) || !empty($data['provider-includes'])) {
 $repoConfig = array('type' => 'composer', 'url' => 'file://' . strtr(realpath($repository), '\\', '/'));
@@ -62,11 +63,11 @@ return $repoConfig;
 
 
 
-public static function fromString(IOInterface $io, Config $config, $repository, $allowFilesystem = false)
+public static function fromString(IOInterface $io, Config $config, $repository, $allowFilesystem = false, RepositoryManager $rm = null)
 {
 $repoConfig = static::configFromString($io, $config, $repository, $allowFilesystem);
 
-return static::createRepo($io, $config, $repoConfig);
+return static::createRepo($io, $config, $repoConfig, $rm);
 }
 
 
@@ -75,9 +76,11 @@ return static::createRepo($io, $config, $repoConfig);
 
 
 
-public static function createRepo(IOInterface $io, Config $config, array $repoConfig)
+public static function createRepo(IOInterface $io, Config $config, array $repoConfig, RepositoryManager $rm = null)
 {
-$rm = static::manager($io, $config, null, Factory::createRemoteFilesystem($io, $config));
+if (!$rm) {
+$rm = static::manager($io, $config, Factory::createHttpDownloader($io, $config));
+}
 $repos = static::createRepos($rm, array($repoConfig));
 
 return reset($repos);
@@ -94,11 +97,14 @@ public static function defaultRepos(IOInterface $io = null, Config $config = nul
 if (!$config) {
 $config = Factory::createConfig($io);
 }
+if ($io) {
+$io->loadConfiguration($config);
+}
 if (!$rm) {
 if (!$io) {
 throw new \InvalidArgumentException('This function requires either an IOInterface or a RepositoryManager');
 }
-$rm = static::manager($io, $config, null, Factory::createRemoteFilesystem($io, $config));
+$rm = static::manager($io, $config, Factory::createHttpDownloader($io, $config));
 }
 
 return static::createRepos($rm, $config->getRepositories());
@@ -111,9 +117,9 @@ return static::createRepos($rm, $config->getRepositories());
 
 
 
-public static function manager(IOInterface $io, Config $config, EventDispatcher $eventDispatcher = null, RemoteFilesystem $rfs = null)
+public static function manager(IOInterface $io, Config $config, HttpDownloader $httpDownloader, EventDispatcher $eventDispatcher = null, ProcessExecutor $process = null)
 {
-$rm = new RepositoryManager($io, $config, $eventDispatcher, $rfs);
+$rm = new RepositoryManager($io, $config, $httpDownloader, $eventDispatcher, $process);
 $rm->setRepositoryClass('composer', 'Composer\Repository\ComposerRepository');
 $rm->setRepositoryClass('vcs', 'Composer\Repository\VcsRepository');
 $rm->setRepositoryClass('package', 'Composer\Repository\PackageRepository');
@@ -150,10 +156,8 @@ throw new \UnexpectedValueException('Repository "'.$index.'" ('.json_encode($rep
 if (!isset($repo['type'])) {
 throw new \UnexpectedValueException('Repository "'.$index.'" ('.json_encode($repo).') must have a type defined');
 }
-$name = is_int($index) && isset($repo['url']) ? preg_replace('{^https?://}i', '', $repo['url']) : $index;
-while (isset($repos[$name])) {
-$name .= '2';
-}
+
+$name = self::generateRepositoryName($index, $repo, $repos);
 if ($repo['type'] === 'filesystem') {
 $repos[$name] = new FilesystemRepository($repo['json']);
 } else {
@@ -162,5 +166,15 @@ $repos[$name] = $rm->createRepository($repo['type'], $repo, $index);
 }
 
 return $repos;
+}
+
+public static function generateRepositoryName($index, array $repo, array $existingRepos)
+{
+$name = is_int($index) && isset($repo['url']) ? preg_replace('{^https?://}i', '', $repo['url']) : $index;
+while (isset($existingRepos[$name])) {
+$name .= '2';
+}
+
+return $name;
 }
 }

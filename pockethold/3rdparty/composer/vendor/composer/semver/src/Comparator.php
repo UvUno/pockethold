@@ -106,6 +106,6 @@ public static function compare($version1, $operator, $version2)
 {
 $constraint = new Constraint($operator, $version2);
 
-return $constraint->matches(new Constraint('==', $version1));
+return $constraint->matchSpecific(new Constraint('==', $version1), true);
 }
 }

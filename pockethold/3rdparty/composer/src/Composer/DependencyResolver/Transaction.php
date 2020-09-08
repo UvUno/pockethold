@@ -13,161 +13,206 @@
 namespace Composer\DependencyResolver;
 
 use Composer\Package\AliasPackage;
+use Composer\Package\Link;
+use Composer\Package\PackageInterface;
+use Composer\Repository\PlatformRepository;
+
 
 
 
 
 class Transaction
 {
-protected $policy;
-protected $pool;
-protected $installedMap;
-protected $decisions;
-protected $transaction;
 
-public function __construct($policy, $pool, $installedMap, $decisions)
+
+
+protected $operations;
+
+
+
+
+
+protected $presentPackages;
+
+
+
+
+
+protected $resultPackageMap;
+
+
+
+
+protected $resultPackagesByName = array();
+
+public function __construct($presentPackages, $resultPackages)
 {
-$this->policy = $policy;
-$this->pool = $pool;
-$this->installedMap = $installedMap;
-$this->decisions = $decisions;
-$this->transaction = array();
+$this->presentPackages = $presentPackages;
+$this->setResultPackageMaps($resultPackages);
+$this->operations = $this->calculateOperations();
 }
 
 public function getOperations()
 {
-$installMeansUpdateMap = $this->findUpdates();
-
-$updateMap = array();
-$installMap = array();
-$uninstallMap = array();
-
-foreach ($this->decisions as $i => $decision) {
-$literal = $decision[Decisions::DECISION_LITERAL];
-$reason = $decision[Decisions::DECISION_REASON];
-
-$package = $this->pool->literalToPackage($literal);
-
-
- if (($literal > 0) == isset($this->installedMap[$package->id])) {
-continue;
+return $this->operations;
 }
 
-if ($literal > 0) {
-if (isset($installMeansUpdateMap[abs($literal)]) && !$package instanceof AliasPackage) {
-$source = $installMeansUpdateMap[abs($literal)];
-
-$updateMap[$package->id] = array(
-'package' => $package,
-'source' => $source,
-'reason' => $reason,
-);
-
-
- unset($installMeansUpdateMap[abs($literal)]);
-$ignoreRemove[$source->id] = true;
-} else {
-$installMap[$package->id] = array(
-'package' => $package,
-'reason' => $reason,
-);
-}
-}
-}
-
-foreach ($this->decisions as $i => $decision) {
-$literal = $decision[Decisions::DECISION_LITERAL];
-$reason = $decision[Decisions::DECISION_REASON];
-$package = $this->pool->literalToPackage($literal);
-
-if ($literal <= 0 &&
-isset($this->installedMap[$package->id]) &&
-!isset($ignoreRemove[$package->id])) {
-$uninstallMap[$package->id] = array(
-'package' => $package,
-'reason' => $reason,
-);
-}
-}
-
-$this->transactionFromMaps($installMap, $updateMap, $uninstallMap);
-
-return $this->transaction;
-}
-
-protected function transactionFromMaps($installMap, $updateMap, $uninstallMap)
+private function setResultPackageMaps($resultPackages)
 {
-$queue = array_map(
-function ($operation) {
-return $operation['package'];
-},
-$this->findRootPackages($installMap, $updateMap)
-);
+$packageSort = function (PackageInterface $a, PackageInterface $b) {
+
+ if ($a->getName() == $b->getName() && $a instanceof AliasPackage != $b instanceof AliasPackage) {
+return $a instanceof AliasPackage ? -1 : 1;
+}
+return strcmp($b->getName(), $a->getName());
+};
+
+$this->resultPackageMap = array();
+foreach ($resultPackages as $package) {
+$this->resultPackageMap[spl_object_hash($package)] = $package;
+foreach ($package->getNames() as $name) {
+$this->resultPackagesByName[$name][] = $package;
+}
+}
+
+uasort($this->resultPackageMap, $packageSort);
+foreach ($this->resultPackagesByName as $name => $packages) {
+uasort($this->resultPackagesByName[$name], $packageSort);
+}
+}
+
+protected function calculateOperations()
+{
+$operations = array();
+
+$presentPackageMap = array();
+$removeMap = array();
+$presentAliasMap = array();
+$removeAliasMap = array();
+foreach ($this->presentPackages as $package) {
+if ($package instanceof AliasPackage) {
+$presentAliasMap[$package->getName().'::'.$package->getVersion()] = $package;
+$removeAliasMap[$package->getName().'::'.$package->getVersion()] = $package;
+} else {
+$presentPackageMap[$package->getName()] = $package;
+$removeMap[$package->getName()] = $package;
+}
+}
+
+$stack = $this->getRootPackages();
 
 $visited = array();
+$processed = array();
 
-while (!empty($queue)) {
-$package = array_pop($queue);
-$packageId = $package->id;
+while (!empty($stack)) {
+$package = array_pop($stack);
 
-if (!isset($visited[$packageId])) {
-$queue[] = $package;
+if (isset($processed[spl_object_hash($package)])) {
+continue;
+}
 
+if (!isset($visited[spl_object_hash($package)])) {
+$visited[spl_object_hash($package)] = true;
+
+$stack[] = $package;
 if ($package instanceof AliasPackage) {
-$queue[] = $package->getAliasOf();
+$stack[] = $package->getAliasOf();
 } else {
 foreach ($package->getRequires() as $link) {
-$possibleRequires = $this->pool->whatProvides($link->getTarget(), $link->getConstraint());
+$possibleRequires = $this->getProvidersInResult($link);
 
 foreach ($possibleRequires as $require) {
-$queue[] = $require;
+$stack[] = $require;
 }
 }
 }
+} elseif (!isset($processed[spl_object_hash($package)])) {
+$processed[spl_object_hash($package)] = true;
 
-$visited[$package->id] = true;
+if ($package instanceof AliasPackage) {
+$aliasKey = $package->getName().'::'.$package->getVersion();
+if (isset($presentAliasMap[$aliasKey])) {
+unset($removeAliasMap[$aliasKey]);
 } else {
-if (isset($installMap[$packageId])) {
-$this->install(
-$installMap[$packageId]['package'],
-$installMap[$packageId]['reason']
-);
-unset($installMap[$packageId]);
+$operations[] = new Operation\MarkAliasInstalledOperation($package);
 }
-if (isset($updateMap[$packageId])) {
-$this->update(
-$updateMap[$packageId]['source'],
-$updateMap[$packageId]['package'],
-$updateMap[$packageId]['reason']
-);
-unset($updateMap[$packageId]);
+} else {
+if (isset($presentPackageMap[$package->getName()])) {
+$source = $presentPackageMap[$package->getName()];
+
+
+ 
+ if ($package->getVersion() != $presentPackageMap[$package->getName()]->getVersion() ||
+$package->getDistReference() !== $presentPackageMap[$package->getName()]->getDistReference() ||
+$package->getSourceReference() !== $presentPackageMap[$package->getName()]->getSourceReference()
+) {
+$operations[] = new Operation\UpdateOperation($source, $package);
+}
+unset($removeMap[$package->getName()]);
+} else {
+$operations[] = new Operation\InstallOperation($package);
+unset($removeMap[$package->getName()]);
+}
 }
 }
 }
 
-foreach ($uninstallMap as $uninstall) {
-$this->uninstall($uninstall['package'], $uninstall['reason']);
+foreach ($removeMap as $name => $package) {
+array_unshift($operations, new Operation\UninstallOperation($package, null));
 }
+foreach ($removeAliasMap as $nameVersion => $package) {
+$operations[] = new Operation\MarkAliasUninstalledOperation($package, null);
 }
 
-protected function findRootPackages($installMap, $updateMap)
+$operations = $this->movePluginsToFront($operations);
+
+ 
+ $operations = $this->moveUninstallsToFront($operations);
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+return $this->operations = $operations;
+}
+
+
+
+
+
+
+
+
+
+protected function getRootPackages()
 {
-$packages = $installMap + $updateMap;
-$roots = $packages;
+$roots = $this->resultPackageMap;
 
-foreach ($packages as $packageId => $operation) {
-$package = $operation['package'];
-
-if (!isset($roots[$packageId])) {
+foreach ($this->resultPackageMap as $packageHash => $package) {
+if (!isset($roots[$packageHash])) {
 continue;
 }
 
 foreach ($package->getRequires() as $link) {
-$possibleRequires = $this->pool->whatProvides($link->getTarget(), $link->getConstraint());
+$possibleRequires = $this->getProvidersInResult($link);
 
 foreach ($possibleRequires as $require) {
 if ($require !== $package) {
-unset($roots[$require->id]);
+unset($roots[spl_object_hash($require)]);
 }
 }
 }
@@ -176,69 +221,87 @@ unset($roots[$require->id]);
 return $roots;
 }
 
-protected function findUpdates()
+protected function getProvidersInResult(Link $link)
 {
-$installMeansUpdateMap = array();
+if (!isset($this->resultPackagesByName[$link->getTarget()])) {
+return array();
+}
+return $this->resultPackagesByName[$link->getTarget()];
+}
 
-foreach ($this->decisions as $i => $decision) {
-$literal = $decision[Decisions::DECISION_LITERAL];
-$package = $this->pool->literalToPackage($literal);
 
-if ($package instanceof AliasPackage) {
+
+
+
+
+
+
+
+
+
+
+
+
+private function movePluginsToFront(array $operations)
+{
+$pluginsNoDeps = array();
+$pluginsWithDeps = array();
+$pluginRequires = array();
+
+foreach (array_reverse($operations, true) as $idx => $op) {
+if ($op instanceof Operation\InstallOperation) {
+$package = $op->getPackage();
+} elseif ($op instanceof Operation\UpdateOperation) {
+$package = $op->getTargetPackage();
+} else {
 continue;
 }
 
 
- if ($literal <= 0 && isset($this->installedMap[$package->id])) {
-$updates = $this->policy->findUpdatePackages($this->pool, $this->installedMap, $package);
+ $isPlugin = $package->getType() === 'composer-plugin' || $package->getType() === 'composer-installer';
 
-$literals = array($package->id);
 
-foreach ($updates as $update) {
-$literals[] = $update->id;
+ if ($isPlugin || count(array_intersect($package->getNames(), $pluginRequires))) {
+
+ $requires = array_filter(array_keys($package->getRequires()), function ($req) {
+return !preg_match(PlatformRepository::PLATFORM_PACKAGE_REGEX, $req);
+});
+
+
+ if ($isPlugin && !count($requires)) {
+
+ array_unshift($pluginsNoDeps, $op);
+} else {
+
+ $pluginRequires = array_merge($pluginRequires, $requires);
+
+ array_unshift($pluginsWithDeps, $op);
 }
 
-foreach ($literals as $updateLiteral) {
-if ($updateLiteral !== $literal) {
-$installMeansUpdateMap[abs($updateLiteral)] = $package;
-}
-}
+unset($operations[$idx]);
 }
 }
 
-return $installMeansUpdateMap;
+return array_merge($pluginsNoDeps, $pluginsWithDeps, $operations);
 }
 
-protected function install($package, $reason)
+
+
+
+
+
+
+
+private function moveUninstallsToFront(array $operations)
 {
-if ($package instanceof AliasPackage) {
-return $this->markAliasInstalled($package, $reason);
+$uninstOps = array();
+foreach ($operations as $idx => $op) {
+if ($op instanceof Operation\UninstallOperation || $op instanceof Operation\MarkAliasUninstalledOperation) {
+$uninstOps[] = $op;
+unset($operations[$idx]);
+}
 }
 
-$this->transaction[] = new Operation\InstallOperation($package, $reason);
-}
-
-protected function update($from, $to, $reason)
-{
-$this->transaction[] = new Operation\UpdateOperation($from, $to, $reason);
-}
-
-protected function uninstall($package, $reason)
-{
-if ($package instanceof AliasPackage) {
-return $this->markAliasUninstalled($package, $reason);
-}
-
-$this->transaction[] = new Operation\UninstallOperation($package, $reason);
-}
-
-protected function markAliasInstalled($package, $reason)
-{
-$this->transaction[] = new Operation\MarkAliasInstalledOperation($package, $reason);
-}
-
-protected function markAliasUninstalled($package, $reason)
-{
-$this->transaction[] = new Operation\MarkAliasUninstalledOperation($package, $reason);
+return array_merge($uninstOps, $operations);
 }
 }

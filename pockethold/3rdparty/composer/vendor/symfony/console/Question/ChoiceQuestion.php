@@ -156,7 +156,7 @@ $results[] = $key;
 }
 }
 
-if (count($results) > 1) {
+if (\count($results) > 1) {
 throw new InvalidArgumentException(sprintf('The provided answer is ambiguous. Value should be one of %s.', implode(' or ', $results)));
 }
 

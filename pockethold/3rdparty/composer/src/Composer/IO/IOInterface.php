@@ -13,13 +13,14 @@
 namespace Composer\IO;
 
 use Composer\Config;
+use Psr\Log\LoggerInterface;
 
 
 
 
 
 
-interface IOInterface
+interface IOInterface extends LoggerInterface
 {
 const QUIET = 1;
 const NORMAL = 2;
@@ -79,6 +80,24 @@ public function write($messages, $newline = true, $verbosity = self::NORMAL);
 
 
 public function writeError($messages, $newline = true, $verbosity = self::NORMAL);
+
+
+
+
+
+
+
+
+public function writeRaw($messages, $newline = true, $verbosity = self::NORMAL);
+
+
+
+
+
+
+
+
+public function writeErrorRaw($messages, $newline = true, $verbosity = self::NORMAL);
 
 
 

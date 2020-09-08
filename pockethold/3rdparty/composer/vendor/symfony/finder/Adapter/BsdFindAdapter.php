@@ -13,10 +13,10 @@ namespace Symfony\Component\Finder\Adapter;
 
 @trigger_error('The '.__NAMESPACE__.'\BsdFindAdapter class is deprecated since Symfony 2.8 and will be removed in 3.0. Use directly the Finder class instead.', E_USER_DEPRECATED);
 
-use Symfony\Component\Finder\Shell\Shell;
-use Symfony\Component\Finder\Shell\Command;
-use Symfony\Component\Finder\Iterator\SortableIterator;
 use Symfony\Component\Finder\Expression\Expression;
+use Symfony\Component\Finder\Iterator\SortableIterator;
+use Symfony\Component\Finder\Shell\Command;
+use Symfony\Component\Finder\Shell\Shell;
 
 
 
@@ -40,7 +40,7 @@ return 'bsd_find';
 
 protected function canBeUsed()
 {
-return in_array($this->shell->getType(), array(Shell::TYPE_BSD, Shell::TYPE_DARWIN)) && parent::canBeUsed();
+return \in_array($this->shell->getType(), array(Shell::TYPE_BSD, Shell::TYPE_DARWIN)) && parent::canBeUsed();
 }
 
 

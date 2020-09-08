@@ -26,12 +26,14 @@ protected function configure()
 {
 $this
 ->setName('clear-cache')
-->setAliases(array('clearcache'))
+->setAliases(array('clearcache', 'cc'))
 ->setDescription('Clears composer\'s internal package cache.')
 ->setHelp(
 <<<EOT
 The <info>clear-cache</info> deletes all cached packages from composer's
 cache directory.
+
+Read more at https://getcomposer.org/doc/03-cli.md#clear-cache-clearcache-cc
 EOT
 )
 ;
@@ -68,5 +70,7 @@ $cache->clear();
 }
 
 $io->writeError('<info>All caches cleared.</info>');
+
+return 0;
 }
 }

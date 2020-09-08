@@ -15,8 +15,12 @@ namespace Composer\Package\Version;
 use Composer\DependencyResolver\Pool;
 use Composer\Package\BasePackage;
 use Composer\Package\PackageInterface;
+use Composer\Plugin\PluginInterface;
+use Composer\Composer;
 use Composer\Package\Loader\ArrayLoader;
 use Composer\Package\Dumper\ArrayDumper;
+use Composer\Repository\RepositorySet;
+use Composer\Repository\PlatformRepository;
 use Composer\Semver\Constraint\Constraint;
 
 
@@ -27,13 +31,23 @@ use Composer\Semver\Constraint\Constraint;
 
 class VersionSelector
 {
-private $pool;
+private $repositorySet;
+
+private $platformConstraints = array();
 
 private $parser;
 
-public function __construct(Pool $pool)
+
+
+
+public function __construct(RepositorySet $repositorySet, PlatformRepository $platformRepo = null)
 {
-$this->pool = $pool;
+$this->repositorySet = $repositorySet;
+if ($platformRepo) {
+foreach ($platformRepo->getPackages() as $package) {
+$this->platformConstraints[$package->getName()][] = new Constraint('==', $package->getVersion());
+}
+}
 }
 
 
@@ -46,17 +60,35 @@ $this->pool = $pool;
 
 
 
-public function findBestCandidate($packageName, $targetPackageVersion = null, $targetPhpVersion = null, $preferredStability = 'stable')
+public function findBestCandidate($packageName, $targetPackageVersion = null, $preferredStability = 'stable', $ignorePlatformReqs = false)
 {
-$constraint = $targetPackageVersion ? $this->getParser()->parseConstraints($targetPackageVersion) : null;
-$candidates = $this->pool->whatProvides(strtolower($packageName), $constraint, true);
+if (!isset(BasePackage::$stabilities[$preferredStability])) {
 
-if ($targetPhpVersion) {
-$phpConstraint = new Constraint('==', $this->getParser()->normalize($targetPhpVersion));
-$candidates = array_filter($candidates, function ($pkg) use ($phpConstraint) {
+ throw new \UnexpectedValueException('Expected a valid stability name as 3rd argument, got '.$preferredStability);
+}
+
+$constraint = $targetPackageVersion ? $this->getParser()->parseConstraints($targetPackageVersion) : null;
+$candidates = $this->repositorySet->findPackages(strtolower($packageName), $constraint);
+
+if ($this->platformConstraints && true !== $ignorePlatformReqs) {
+$platformConstraints = $this->platformConstraints;
+$ignorePlatformReqs = $ignorePlatformReqs ?: array();
+$candidates = array_filter($candidates, function ($pkg) use ($platformConstraints, $ignorePlatformReqs) {
 $reqs = $pkg->getRequires();
 
-return !isset($reqs['php']) || $reqs['php']->getConstraint()->matches($phpConstraint);
+foreach ($reqs as $name => $link) {
+if (!in_array($name, $ignorePlatformReqs, true) && isset($platformConstraints[$name])) {
+foreach ($platformConstraints[$name] as $constraint) {
+if ($link->getConstraint()->matches($constraint)) {
+continue 2;
+}
+}
+
+return false;
+}
+}
+
+return true;
 });
 }
 

@@ -37,14 +37,14 @@ $executableFinder = new PhpExecutableFinder();
 if (false === $php = $executableFinder->find()) {
 $php = null;
 }
-if ('phpdbg' === PHP_SAPI) {
+if ('phpdbg' === \PHP_SAPI) {
 $file = tempnam(sys_get_temp_dir(), 'dbg');
 file_put_contents($file, $script);
 register_shutdown_function('unlink', $file);
 $php .= ' '.ProcessUtils::escapeArgument($file);
 $script = null;
 }
-if ('\\' !== DIRECTORY_SEPARATOR && null !== $php) {
+if ('\\' !== \DIRECTORY_SEPARATOR && null !== $php) {
 
  
  

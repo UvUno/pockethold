@@ -58,4 +58,9 @@ throw new InvalidRepositoryException('A repository of type "package" contains an
 $this->addPackage($package);
 }
 }
+
+public function getRepoName()
+{
+return preg_replace('{^array }', 'package ', parent::getRepoName());
+}
 }

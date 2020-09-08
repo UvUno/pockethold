@@ -307,10 +307,9 @@ return true;
 return false;
 }
 
-$processExecutor = new ProcessExecutor();
-
-$exit = $processExecutor->execute(
-"svn info --non-interactive {$url}",
+$process = new ProcessExecutor($io);
+$exit = $process->execute(
+"svn info --non-interactive ".ProcessExecutor::escape($url),
 $ignoredOutput
 );
 
@@ -320,14 +319,14 @@ if ($exit === 0) {
 }
 
 
- if (false !== stripos($processExecutor->getErrorOutput(), 'authorization failed:')) {
+ if (false !== stripos($process->getErrorOutput(), 'authorization failed:')) {
 
  
  return true;
 }
 
 
- if (false !== stripos($processExecutor->getErrorOutput(), 'Authentication failed')) {
+ if (false !== stripos($process->getErrorOutput(), 'Authentication failed')) {
 
  
  return true;

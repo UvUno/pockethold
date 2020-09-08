@@ -25,6 +25,7 @@ protected $prettyVersion;
 protected $dev;
 protected $rootPackageAlias = false;
 protected $stability;
+protected $hasSelfVersionRequires = false;
 
 
 protected $aliasOf;
@@ -173,24 +174,40 @@ return $this->rootPackageAlias;
 
 protected function replaceSelfVersionDependencies(array $links, $linkType)
 {
-if (in_array($linkType, array('conflicts', 'provides', 'replaces'), true)) {
+
+ $prettyVersion = $this->prettyVersion;
+if ($prettyVersion === VersionParser::DEFAULT_BRANCH_ALIAS) {
+$prettyVersion = $this->aliasOf->getPrettyVersion();
+}
+
+if (\in_array($linkType, array('conflicts', 'provides', 'replaces'), true)) {
 $newLinks = array();
 foreach ($links as $link) {
 
  if ('self.version' === $link->getPrettyConstraint()) {
-$newLinks[] = new Link($link->getSource(), $link->getTarget(), new Constraint('=', $this->version), $linkType, $this->prettyVersion);
+$newLinks[] = new Link($link->getSource(), $link->getTarget(), $constraint = new Constraint('=', $this->version), $linkType, $prettyVersion);
+$constraint->setPrettyString($prettyVersion);
 }
 }
 $links = array_merge($links, $newLinks);
 } else {
 foreach ($links as $index => $link) {
 if ('self.version' === $link->getPrettyConstraint()) {
-$links[$index] = new Link($link->getSource(), $link->getTarget(), new Constraint('=', $this->version), $linkType, $this->prettyVersion);
+if ($linkType === 'requires') {
+$this->hasSelfVersionRequires = true;
+}
+$links[$index] = new Link($link->getSource(), $link->getTarget(), $constraint = new Constraint('=', $this->version), $linkType, $prettyVersion);
+$constraint->setPrettyString($prettyVersion);
 }
 }
 }
 
 return $links;
+}
+
+public function hasSelfVersionRequires()
+{
+return $this->hasSelfVersionRequires;
 }
 
 
@@ -377,14 +394,29 @@ public function getSupport()
 return $this->aliasOf->getSupport();
 }
 
+public function getFunding()
+{
+return $this->aliasOf->getFunding();
+}
+
 public function getNotificationUrl()
 {
 return $this->aliasOf->getNotificationUrl();
 }
 
+public function getArchiveName()
+{
+return $this->aliasOf->getArchiveName();
+}
+
 public function getArchiveExcludes()
 {
 return $this->aliasOf->getArchiveExcludes();
+}
+
+public function isDefaultBranch()
+{
+return $this->aliasOf->isDefaultBranch();
 }
 
 public function isAbandoned()
@@ -400,5 +432,20 @@ return $this->aliasOf->getReplacementPackage();
 public function __toString()
 {
 return parent::__toString().' (alias of '.$this->aliasOf->getVersion().')';
+}
+
+public function setDistUrl($url)
+{
+return $this->aliasOf->setDistUrl($url);
+}
+
+public function setDistType($type)
+{
+return $this->aliasOf->setDistType($type);
+}
+
+public function setSourceDistReferences($reference)
+{
+return $this->aliasOf->setSourceDistReferences($reference);
 }
 }

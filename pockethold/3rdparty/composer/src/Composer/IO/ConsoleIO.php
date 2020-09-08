@@ -14,6 +14,7 @@ namespace Composer\IO;
 
 use Composer\Question\StrictConfirmationQuestion;
 use Symfony\Component\Console\Helper\HelperSet;
+use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -132,10 +133,26 @@ $this->doWrite($messages, $newline, true, $verbosity);
 
 
 
+public function writeRaw($messages, $newline = true, $verbosity = self::NORMAL)
+{
+$this->doWrite($messages, $newline, false, $verbosity, true);
+}
 
 
 
-private function doWrite($messages, $newline, $stderr, $verbosity)
+
+public function writeErrorRaw($messages, $newline = true, $verbosity = self::NORMAL)
+{
+$this->doWrite($messages, $newline, true, $verbosity, true);
+}
+
+
+
+
+
+
+
+private function doWrite($messages, $newline, $stderr, $verbosity, $raw = false)
 {
 $sfVerbosity = $this->verbosityMap[$verbosity];
 if ($sfVerbosity > $this->output->getVerbosity()) {
@@ -149,11 +166,19 @@ return;
 $sfVerbosity = OutputInterface::OUTPUT_NORMAL;
 }
 
+if ($raw) {
+if ($sfVerbosity === OutputInterface::OUTPUT_NORMAL) {
+$sfVerbosity = OutputInterface::OUTPUT_RAW;
+} else {
+$sfVerbosity |= OutputInterface::OUTPUT_RAW;
+}
+}
+
 if (null !== $this->startTime) {
 $memoryUsage = memory_get_usage() / 1024 / 1024;
 $timeSpent = microtime(true) - $this->startTime;
 $messages = array_map(function ($message) use ($memoryUsage, $timeSpent) {
-return sprintf('[%.1fMB/%.2fs] %s', $memoryUsage, $timeSpent, $message);
+return sprintf('[%.1fMiB/%.2fs] %s', $memoryUsage, $timeSpent, $message);
 }, (array) $messages);
 }
 
@@ -227,6 +252,15 @@ $this->lastMessageErr = $messages;
 } else {
 $this->lastMessage = $messages;
 }
+}
+
+
+
+
+
+public function getProgressBar($max = 0)
+{
+return new ProgressBar($this->getErrorOutput(), $max);
 }
 
 

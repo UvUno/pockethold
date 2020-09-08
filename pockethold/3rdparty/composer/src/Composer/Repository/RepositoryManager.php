@@ -16,7 +16,8 @@ use Composer\IO\IOInterface;
 use Composer\Config;
 use Composer\EventDispatcher\EventDispatcher;
 use Composer\Package\PackageInterface;
-use Composer\Util\RemoteFilesystem;
+use Composer\Util\HttpDownloader;
+use Composer\Util\ProcessExecutor;
 
 
 
@@ -27,20 +28,30 @@ use Composer\Util\RemoteFilesystem;
 
 class RepositoryManager
 {
-private $localRepository;
-private $repositories = array();
-private $repositoryClasses = array();
-private $io;
-private $config;
-private $eventDispatcher;
-private $rfs;
 
-public function __construct(IOInterface $io, Config $config, EventDispatcher $eventDispatcher = null, RemoteFilesystem $rfs = null)
+private $localRepository;
+
+private $repositories = array();
+
+private $repositoryClasses = array();
+
+private $io;
+
+private $config;
+
+private $httpDownloader;
+
+private $eventDispatcher;
+
+private $process;
+
+public function __construct(IOInterface $io, Config $config, HttpDownloader $httpDownloader, EventDispatcher $eventDispatcher = null, ProcessExecutor $process = null)
 {
 $this->io = $io;
 $this->config = $config;
+$this->httpDownloader = $httpDownloader;
 $this->eventDispatcher = $eventDispatcher;
-$this->rfs = $rfs;
+$this->process = $process ?: new ProcessExecutor($io);
 }
 
 
@@ -125,13 +136,18 @@ $this->io->writeError('<warning>Repository "'.$name.'" ('.json_encode($config).'
 
 $class = $this->repositoryClasses[$type];
 
-$reflMethod = new \ReflectionMethod($class, '__construct');
-$params = $reflMethod->getParameters();
-if (isset($params[4]) && $params[4]->getClass() && $params[4]->getClass()->getName() === 'Composer\Util\RemoteFilesystem') {
-return new $class($config, $this->io, $this->config, $this->eventDispatcher, $this->rfs);
+if (isset($config['only']) || isset($config['exclude']) || isset($config['canonical'])) {
+$filterConfig = $config;
+unset($config['only'], $config['exclude'], $config['canonical']);
 }
 
-return new $class($config, $this->io, $this->config, $this->eventDispatcher);
+$repository = new $class($config, $this->io, $this->config, $this->httpDownloader, $this->eventDispatcher, $this->process);
+
+if (isset($filterConfig)) {
+$repository = new FilterRepository($repository, $filterConfig);
+}
+
+return $repository;
 }
 
 
@@ -160,7 +176,7 @@ return $this->repositories;
 
 
 
-public function setLocalRepository(WritableRepositoryInterface $repository)
+public function setLocalRepository(InstalledRepositoryInterface $repository)
 {
 $this->localRepository = $repository;
 }

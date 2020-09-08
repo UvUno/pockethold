@@ -52,6 +52,7 @@ new InputOption('verbose', 'v|vv|vvv', InputOption::VALUE_NONE, 'Show modified f
 The status command displays a list of dependencies that have
 been modified locally.
 
+Read more at https://getcomposer.org/doc/03-cli.md#status
 EOT
 )
 ;
@@ -64,19 +65,36 @@ EOT
 
 protected function execute(InputInterface $input, OutputInterface $output)
 {
-
- $composer = $this->getComposer();
+$composer = $this->getComposer();
 
 $commandEvent = new CommandEvent(PluginEvents::COMMAND, 'status', $input, $output);
 $composer->getEventDispatcher()->dispatch($commandEvent->getName(), $commandEvent);
+
+
+ $composer->getEventDispatcher()->dispatchScript(ScriptEvents::PRE_STATUS_CMD, true);
+
+$exitCode = $this->doExecute($input, $output);
+
+
+ $composer->getEventDispatcher()->dispatchScript(ScriptEvents::POST_STATUS_CMD, true);
+
+return $exitCode;
+}
+
+
+
+
+
+
+private function doExecute(InputInterface $input, OutputInterface $output)
+{
+
+ $composer = $this->getComposer();
 
 $installedRepo = $composer->getRepositoryManager()->getLocalRepository();
 
 $dm = $composer->getDownloadManager();
 $im = $composer->getInstallationManager();
-
-
- $composer->getEventDispatcher()->dispatchScript(ScriptEvents::PRE_STATUS_CMD, true);
 
 $errors = array();
 $io = $this->getIO();
@@ -89,7 +107,7 @@ $dumper = new ArrayDumper;
 
 
  foreach ($installedRepo->getCanonicalPackages() as $package) {
-$downloader = $dm->getDownloaderForInstalledPackage($package);
+$downloader = $dm->getDownloaderForPackage($package);
 $targetDir = $im->getInstallPath($package);
 
 if ($downloader instanceof ChangeReportInterface) {
@@ -204,9 +222,6 @@ $io->write($path);
 if (($errors || $unpushedChanges || $vcsVersionChanges) && !$input->getOption('verbose')) {
 $io->writeError('Use --verbose (-v) to see a list of files');
 }
-
-
- $composer->getEventDispatcher()->dispatchScript(ScriptEvents::POST_STATUS_CMD, true);
 
 return ($errors ? self::EXIT_CODE_ERRORS : 0) + ($unpushedChanges ? self::EXIT_CODE_UNPUSHED_CHANGES : 0) + ($vcsVersionChanges ? self::EXIT_CODE_VERSION_CHANGES : 0);
 }

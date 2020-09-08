@@ -136,7 +136,7 @@ public static $exitCodes = array(
 
 public function __construct($commandline, $cwd = null, array $env = null, $input = null, $timeout = 60, array $options = array())
 {
-if (!function_exists('proc_open')) {
+if (!\function_exists('proc_open')) {
 throw new RuntimeException('The Process class relies on proc_open, which is not available on your PHP installation.');
 }
 
@@ -147,7 +147,7 @@ $this->cwd = $cwd;
  
  
  
- if (null === $this->cwd && (defined('ZEND_THREAD_SAFE') || '\\' === DIRECTORY_SEPARATOR)) {
+ if (null === $this->cwd && (\defined('ZEND_THREAD_SAFE') || '\\' === \DIRECTORY_SEPARATOR)) {
 $this->cwd = getcwd();
 }
 if (null !== $env) {
@@ -156,9 +156,9 @@ $this->setEnv($env);
 
 $this->setInput($input);
 $this->setTimeout($timeout);
-$this->useFileHandles = '\\' === DIRECTORY_SEPARATOR;
+$this->useFileHandles = '\\' === \DIRECTORY_SEPARATOR;
 $this->pty = false;
-$this->enhanceSigchildCompatibility = '\\' !== DIRECTORY_SEPARATOR && $this->isSigchildEnabled();
+$this->enhanceSigchildCompatibility = '\\' !== \DIRECTORY_SEPARATOR && $this->isSigchildEnabled();
 $this->options = array_replace(array('suppress_errors' => true, 'binary_pipes' => true), $options);
 }
 
@@ -259,7 +259,7 @@ $descriptors = $this->getDescriptors();
 
 $commandline = $this->commandline;
 
-if ('\\' === DIRECTORY_SEPARATOR && $this->enhanceWindowsCompatibility) {
+if ('\\' === \DIRECTORY_SEPARATOR && $this->enhanceWindowsCompatibility) {
 $commandline = 'cmd /V:ON /E:ON /D /C "('.$commandline.')';
 foreach ($this->processPipes->getFiles() as $offset => $filename) {
 $commandline .= ' '.$offset.'>'.ProcessUtils::escapeArgument($filename);
@@ -284,7 +284,7 @@ $commandline .= 'pid=$!; echo $pid >&3; wait $pid; code=$?; echo $code >&3; exit
 
 $this->process = proc_open($commandline, $descriptors, $this->processPipes->pipes, $this->cwd, $this->env, $this->options);
 
-if (!is_resource($this->process)) {
+if (!\is_resource($this->process)) {
 throw new RuntimeException('Unable to launch a new process.');
 }
 $this->status = self::STATUS_STARTED;
@@ -354,8 +354,8 @@ $this->callback = $this->buildCallback($callback);
 
 do {
 $this->checkTimeout();
-$running = '\\' === DIRECTORY_SEPARATOR ? $this->isRunning() : $this->processPipes->areOpen();
-$this->readPipes($running, '\\' !== DIRECTORY_SEPARATOR || !$running);
+$running = '\\' === \DIRECTORY_SEPARATOR ? $this->isRunning() : $this->processPipes->areOpen();
+$this->readPipes($running, '\\' !== \DIRECTORY_SEPARATOR || !$running);
 } while ($running);
 
 while ($this->isRunning()) {
@@ -903,7 +903,7 @@ return $this;
 
 public function setTty($tty)
 {
-if ('\\' === DIRECTORY_SEPARATOR && $tty) {
+if ('\\' === \DIRECTORY_SEPARATOR && $tty) {
 throw new RuntimeException('TTY mode is not supported on Windows platform.');
 }
 if ($tty) {
@@ -1014,7 +1014,7 @@ public function setEnv(array $env)
 {
 
  $env = array_filter($env, function ($value) {
-return !is_array($value);
+return !\is_array($value);
 });
 
 $this->env = array();
@@ -1213,7 +1213,7 @@ if (null !== $result) {
 return $result;
 }
 
-if ('\\' === DIRECTORY_SEPARATOR) {
+if ('\\' === \DIRECTORY_SEPARATOR) {
 return $result = false;
 }
 
@@ -1227,7 +1227,7 @@ return $result = (bool) @proc_open('echo 1 >/dev/null', array(array('pty'), arra
 
 private function getDescriptors()
 {
-if ('\\' === DIRECTORY_SEPARATOR) {
+if ('\\' === \DIRECTORY_SEPARATOR) {
 $this->processPipes = WindowsPipes::create($this, $this->input);
 } else {
 $this->processPipes = UnixPipes::create($this, $this->input);
@@ -1258,7 +1258,7 @@ $that->addErrorOutput($data);
 }
 
 if (null !== $callback) {
-call_user_func($callback, $type, $data);
+\call_user_func($callback, $type, $data);
 }
 };
 
@@ -1279,7 +1279,7 @@ return;
 $this->processInformation = proc_get_status($this->process);
 $running = $this->processInformation['running'];
 
-$this->readPipes($running && $blocking, '\\' !== DIRECTORY_SEPARATOR || !$running);
+$this->readPipes($running && $blocking, '\\' !== \DIRECTORY_SEPARATOR || !$running);
 
 if ($this->fallbackStatus && $this->enhanceSigchildCompatibility && $this->isSigchildEnabled()) {
 $this->processInformation = $this->fallbackStatus + $this->processInformation;
@@ -1301,7 +1301,7 @@ if (null !== self::$sigchild) {
 return self::$sigchild;
 }
 
-if (!function_exists('phpinfo') || defined('HHVM_VERSION')) {
+if (!\function_exists('phpinfo') || \defined('HHVM_VERSION')) {
 return self::$sigchild = false;
 }
 
@@ -1379,7 +1379,7 @@ $this->fallbackStatus['exitcode'] = (int) $data;
 private function close()
 {
 $this->processPipes->close();
-if (is_resource($this->process)) {
+if (\is_resource($this->process)) {
 proc_close($this->process);
 }
 $this->exitcode = $this->processInformation['exitcode'];
@@ -1413,8 +1413,8 @@ $this->callback = null;
 $this->exitcode = null;
 $this->fallbackStatus = array();
 $this->processInformation = null;
-$this->stdout = fopen('php://temp/maxmemory:'.(1024 * 1024), 'wb+');
-$this->stderr = fopen('php://temp/maxmemory:'.(1024 * 1024), 'wb+');
+$this->stdout = fopen('php://temp/maxmemory:'.(1024 * 1024), 'w+b');
+$this->stderr = fopen('php://temp/maxmemory:'.(1024 * 1024), 'w+b');
 $this->process = null;
 $this->latestSignal = null;
 $this->status = self::STATUS_READY;
@@ -1444,7 +1444,7 @@ throw new LogicException('Can not send signal on a non running process.');
 return false;
 }
 
-if ('\\' === DIRECTORY_SEPARATOR) {
+if ('\\' === \DIRECTORY_SEPARATOR) {
 exec(sprintf('taskkill /F /T /PID %d 2>&1', $pid), $output, $exitCode);
 if ($exitCode && $this->isRunning()) {
 if ($throwException) {
@@ -1456,7 +1456,7 @@ return false;
 } else {
 if (!$this->enhanceSigchildCompatibility || !$this->isSigchildEnabled()) {
 $ok = @proc_terminate($this->process, $signal);
-} elseif (function_exists('posix_kill')) {
+} elseif (\function_exists('posix_kill')) {
 $ok = @posix_kill($pid, $signal);
 } elseif ($ok = proc_open(sprintf('kill -%d %d', $signal, $pid), array(2 => array('pipe', 'w')), $pipes)) {
 $ok = false === fgets($pipes[2]);

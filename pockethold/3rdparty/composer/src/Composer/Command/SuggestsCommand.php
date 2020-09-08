@@ -13,6 +13,9 @@
 namespace Composer\Command;
 
 use Composer\Repository\PlatformRepository;
+use Composer\Repository\RootPackageRepository;
+use Composer\Repository\InstalledRepository;
+use Composer\Installer\SuggestedPackagesReporter;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -26,8 +29,10 @@ $this
 ->setName('suggests')
 ->setDescription('Shows package suggestions.')
 ->setDefinition(array(
-new InputOption('by-package', null, InputOption::VALUE_NONE, 'Groups output by suggesting package'),
+new InputOption('by-package', null, InputOption::VALUE_NONE, 'Groups output by suggesting package (default)'),
 new InputOption('by-suggestion', null, InputOption::VALUE_NONE, 'Groups output by suggested package'),
+new InputOption('all', 'a', InputOption::VALUE_NONE, 'Show suggestions from all dependencies, including transitive ones'),
+new InputOption('list', null, InputOption::VALUE_NONE, 'Show only list of suggested package names'),
 new InputOption('no-dev', null, InputOption::VALUE_NONE, 'Exclude suggestions from require-dev packages'),
 new InputArgument('packages', InputArgument::IS_ARRAY | InputArgument::OPTIONAL, 'Packages that you want to list suggestions from.'),
 ))
@@ -36,116 +41,64 @@ new InputArgument('packages', InputArgument::IS_ARRAY | InputArgument::OPTIONAL,
 
 The <info>%command.name%</info> command shows a sorted list of suggested packages.
 
-Enabling <info>-v</info> implies <info>--by-package --by-suggestion</info>, showing both lists.
-
+Read more at https://getcomposer.org/doc/03-cli.md#suggests
 EOT
 )
 ;
 }
 
+
+
+
 protected function execute(InputInterface $input, OutputInterface $output)
 {
-$lock = $this->getComposer()->getLocker()->getLockData();
+$composer = $this->getComposer();
 
-if (empty($lock)) {
-throw new \RuntimeException('Lockfile seems to be empty?');
+$installedRepos = array(
+new RootPackageRepository(clone $composer->getPackage()),
+);
+
+$locker = $composer->getLocker();
+if ($locker->isLocked()) {
+$installedRepos[] = new PlatformRepository(array(), $locker->getPlatformOverrides());
+$installedRepos[] = $locker->getLockedRepository(!$input->getOption('no-dev'));
+} else {
+$installedRepos[] = new PlatformRepository(array(), $composer->getConfig()->get('platform') ?: array());
+$installedRepos[] = $composer->getRepositoryManager()->getLocalRepository();
 }
 
-$packages = $lock['packages'];
-
-if (!$input->getOption('no-dev')) {
-$packages += $lock['packages-dev'];
-}
+$installedRepo = new InstalledRepository($installedRepos);
+$reporter = new SuggestedPackagesReporter($this->getIO());
 
 $filter = $input->getArgument('packages');
-
-
- $installed = array();
+$packages = $installedRepo->getPackages();
+$packages[] = $composer->getPackage();
 foreach ($packages as $package) {
-$installed[] = $package['name'];
-
-if (!empty($package['provide'])) {
-$installed = array_merge($installed, array_keys($package['provide']));
-}
-
-if (!empty($package['replace'])) {
-$installed = array_merge($installed, array_keys($package['replace']));
-}
-}
-
-
- $installed = array_flip($installed);
-ksort($installed);
-
-
- $platform = new PlatformRepository(array(), $this->getComposer()->getConfig()->get('platform') ?: array());
-
-
- $suggesters = array();
-$suggested = array();
-foreach ($packages as $package) {
-$packageName = $package['name'];
-if ((!empty($filter) && !in_array($packageName, $filter)) || empty($package['suggest'])) {
+if (!empty($filter) && !in_array($package->getName(), $filter)) {
 continue;
 }
-foreach ($package['suggest'] as $suggestion => $reason) {
-if (false === strpos('/', $suggestion) && null !== $platform->findPackage($suggestion, '*')) {
-continue;
+
+$reporter->addSuggestionsFromPackage($package);
 }
-if (!isset($installed[$suggestion])) {
-$suggesters[$packageName][$suggestion] = $reason;
-$suggested[$suggestion][$packageName] = $reason;
-}
-}
-}
-ksort($suggesters);
-ksort($suggested);
 
 
- $mode = 0;
+ $mode = SuggestedPackagesReporter::MODE_BY_PACKAGE;
 $io = $this->getIO();
-if ($input->getOption('by-package') || $io->isVerbose()) {
-$mode |= 1;
-}
-if ($input->getOption('by-suggestion')) {
-$mode |= 2;
+
+ if ($input->getOption('by-suggestion')) {
+$mode = SuggestedPackagesReporter::MODE_BY_SUGGESTION;
 }
 
-
- if ($mode === 0) {
-foreach (array_keys($suggested) as $suggestion) {
-$io->write(sprintf('<info>%s</info>', $suggestion));
+ if ($input->getOption('by-package')) {
+$mode |= SuggestedPackagesReporter::MODE_BY_PACKAGE;
 }
 
-return;
+ if ($input->getOption('list')) {
+$mode = SuggestedPackagesReporter::MODE_LIST;
 }
 
+$reporter->output($mode, $installedRepo, empty($filter) && !$input->getOption('all') ? $composer->getPackage() : null);
 
- if ($mode & 1) {
-foreach ($suggesters as $suggester => $suggestions) {
-$io->write(sprintf('<comment>%s</comment> suggests:', $suggester));
-
-foreach ($suggestions as $suggestion => $reason) {
-$io->write(sprintf(' - <info>%s</info>: %s', $suggestion, $reason ?: '*'));
-}
-$io->write('');
-}
-}
-
-
- if ($mode & 2) {
-
- if ($mode & 1) {
-$io->write(str_repeat('-', 78));
-}
-foreach ($suggested as $suggestion => $suggesters) {
-$io->write(sprintf('<comment>%s</comment> is suggested by:', $suggestion));
-
-foreach ($suggesters as $suggester => $reason) {
-$io->write(sprintf(' - <info>%s</info>: %s', $suggester, $reason ?: '*'));
-}
-$io->write('');
-}
-}
+return 0;
 }
 }

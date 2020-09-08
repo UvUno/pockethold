@@ -36,6 +36,13 @@ InputArgument::IS_ARRAY | InputArgument::OPTIONAL,
 'Arguments to pass to the binary. Use <info>--</info> to separate from composer arguments'
 ),
 ))
+->setHelp(
+<<<EOT
+Executes a vendored binary/script.
+
+Read more at https://getcomposer.org/doc/03-cli.md#exec
+EOT
+)
 ;
 }
 
@@ -83,6 +90,17 @@ $dispatcher = $composer->getEventDispatcher();
 $dispatcher->addListener('__exec_command', $binary);
 if ($output->getVerbosity() === OutputInterface::VERBOSITY_NORMAL) {
 $output->setVerbosity(OutputInterface::VERBOSITY_QUIET);
+}
+
+
+ 
+ 
+ if (getcwd() !== $this->getApplication()->getInitialWorkingDirectory()) {
+try {
+chdir($this->getApplication()->getInitialWorkingDirectory());
+} catch (\Exception $e) {
+throw new \RuntimeException('Could not switch back to working directory "'.$this->getApplication()->getInitialWorkingDirectory().'"', 0, $e);
+}
 }
 
 return $dispatcher->dispatchScript('__exec_command', true, $input->getArgument('args'));

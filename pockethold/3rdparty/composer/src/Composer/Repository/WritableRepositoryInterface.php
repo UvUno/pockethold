@@ -13,6 +13,7 @@
 namespace Composer\Repository;
 
 use Composer\Package\PackageInterface;
+use Composer\Installer\InstallationManager;
 
 
 
@@ -24,7 +25,9 @@ interface WritableRepositoryInterface extends RepositoryInterface
 
 
 
-public function write();
+
+
+public function write($devMode, InstallationManager $installationManager);
 
 
 

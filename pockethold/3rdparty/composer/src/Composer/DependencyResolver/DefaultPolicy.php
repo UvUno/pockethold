@@ -44,54 +44,33 @@ $version = new Constraint('==', $a->getVersion());
 return $constraint->matchSpecific($version, true);
 }
 
-public function findUpdatePackages(Pool $pool, array $installedMap, PackageInterface $package, $mustMatchName = false)
+public function selectPreferredPackages(Pool $pool, array $literals, $requiredPackage = null)
 {
-$packages = array();
-
-foreach ($pool->whatProvides($package->getName(), null, $mustMatchName) as $candidate) {
-if ($candidate !== $package) {
-$packages[] = $candidate;
-}
-}
-
-return $packages;
-}
-
-public function getPriority(Pool $pool, PackageInterface $package)
-{
-return $pool->getPriority($package->getRepository());
-}
-
-public function selectPreferredPackages(Pool $pool, array $installedMap, array $literals, $requiredPackage = null)
-{
-$packages = $this->groupLiteralsByNamePreferInstalled($pool, $installedMap, $literals);
-
-foreach ($packages as &$literals) {
+$packages = $this->groupLiteralsByName($pool, $literals);
 $policy = $this;
-usort($literals, function ($a, $b) use ($policy, $pool, $installedMap, $requiredPackage) {
-return $policy->compareByPriorityPreferInstalled($pool, $installedMap, $pool->literalToPackage($a), $pool->literalToPackage($b), $requiredPackage, true);
+
+foreach ($packages as &$nameLiterals) {
+usort($nameLiterals, function ($a, $b) use ($policy, $pool, $requiredPackage) {
+return $policy->compareByPriority($pool, $pool->literalToPackage($a), $pool->literalToPackage($b), $requiredPackage, true);
 });
 }
 
-foreach ($packages as &$literals) {
-$literals = $this->pruneToHighestPriorityOrInstalled($pool, $installedMap, $literals);
-
-$literals = $this->pruneToBestVersion($pool, $literals);
-
-$literals = $this->pruneRemoteAliases($pool, $literals);
+foreach ($packages as &$sortedLiterals) {
+$sortedLiterals = $this->pruneToBestVersion($pool, $sortedLiterals);
+$sortedLiterals = $this->pruneRemoteAliases($pool, $sortedLiterals);
 }
 
-$selected = call_user_func_array('array_merge', $packages);
+$selected = \call_user_func_array('array_merge', array_values($packages));
 
 
- usort($selected, function ($a, $b) use ($policy, $pool, $installedMap, $requiredPackage) {
-return $policy->compareByPriorityPreferInstalled($pool, $installedMap, $pool->literalToPackage($a), $pool->literalToPackage($b), $requiredPackage);
+ usort($selected, function ($a, $b) use ($policy, $pool, $requiredPackage) {
+return $policy->compareByPriority($pool, $pool->literalToPackage($a), $pool->literalToPackage($b), $requiredPackage);
 });
 
 return $selected;
 }
 
-protected function groupLiteralsByNamePreferInstalled(Pool $pool, array $installedMap, $literals)
+protected function groupLiteralsByName(Pool $pool, $literals)
 {
 $packages = array();
 foreach ($literals as $literal) {
@@ -100,12 +79,7 @@ $packageName = $pool->literalToPackage($literal)->getName();
 if (!isset($packages[$packageName])) {
 $packages[$packageName] = array();
 }
-
-if (isset($installedMap[abs($literal)])) {
-array_unshift($packages[$packageName], $literal);
-} else {
 $packages[$packageName][] = $literal;
-}
 }
 
 return $packages;
@@ -114,9 +88,8 @@ return $packages;
 
 
 
-public function compareByPriorityPreferInstalled(Pool $pool, array $installedMap, PackageInterface $a, PackageInterface $b, $requiredPackage = null, $ignoreReplace = false)
+public function compareByPriority(Pool $pool, PackageInterface $a, PackageInterface $b, $requiredPackage = null, $ignoreReplace = false)
 {
-if ($a->getRepository() === $b->getRepository()) {
 
  if ($a->getName() === $b->getName()) {
 $aAliased = $a instanceof AliasPackage;
@@ -158,17 +131,6 @@ return 0;
 }
 
 return ($a->id < $b->id) ? -1 : 1;
-}
-
-if (isset($installedMap[$a->id])) {
-return -1;
-}
-
-if (isset($installedMap[$b->id])) {
-return 1;
-}
-
-return ($this->getPriority($pool, $a) > $this->getPriority($pool, $b)) ? -1 : 1;
 }
 
 
@@ -216,37 +178,6 @@ $bestLiterals[] = $literal;
 }
 
 return $bestLiterals;
-}
-
-
-
-
-protected function pruneToHighestPriorityOrInstalled(Pool $pool, array $installedMap, array $literals)
-{
-$selected = array();
-
-$priority = null;
-
-foreach ($literals as $literal) {
-$package = $pool->literalToPackage($literal);
-
-if (isset($installedMap[$package->id])) {
-$selected[] = $literal;
-continue;
-}
-
-if (null === $priority) {
-$priority = $this->getPriority($pool, $package);
-}
-
-if ($this->getPriority($pool, $package) != $priority) {
-break;
-}
-
-$selected[] = $literal;
-}
-
-return $selected;
 }
 
 

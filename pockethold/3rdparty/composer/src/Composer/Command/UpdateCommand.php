@@ -13,10 +13,14 @@
 namespace Composer\Command;
 
 use Composer\Composer;
+use Composer\DependencyResolver\Request;
 use Composer\Installer;
 use Composer\IO\IOInterface;
 use Composer\Plugin\CommandEvent;
 use Composer\Plugin\PluginEvents;
+use Composer\Package\Version\VersionParser;
+use Composer\Semver\Constraint\MultiConstraint;
+use Composer\Package\Link;
 use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -38,24 +42,26 @@ $this
 ->setDescription('Upgrades your dependencies to the latest version according to composer.json, and updates the composer.lock file.')
 ->setDefinition(array(
 new InputArgument('packages', InputArgument::IS_ARRAY | InputArgument::OPTIONAL, 'Packages that should be updated, if not provided all packages are.'),
+new InputOption('with', null, InputOption::VALUE_IS_ARRAY | InputOption::VALUE_REQUIRED, 'Temporary version constraint to add, e.g. foo/bar:1.0.0 or foo/bar=1.0.0'),
 new InputOption('prefer-source', null, InputOption::VALUE_NONE, 'Forces installation from package sources when possible, including VCS information.'),
 new InputOption('prefer-dist', null, InputOption::VALUE_NONE, 'Forces installation from package dist even for dev versions.'),
 new InputOption('dry-run', null, InputOption::VALUE_NONE, 'Outputs the operations but will not execute anything (implicitly enables --verbose).'),
-new InputOption('dev', null, InputOption::VALUE_NONE, 'Enables installation of require-dev packages (enabled by default, only present for BC).'),
+new InputOption('dev', null, InputOption::VALUE_NONE, 'DEPRECATED: Enables installation of require-dev packages (enabled by default, only present for BC).'),
 new InputOption('no-dev', null, InputOption::VALUE_NONE, 'Disables installation of require-dev packages.'),
 new InputOption('lock', null, InputOption::VALUE_NONE, 'Only updates the lock file hash to suppress warning about the lock file being out of date.'),
-new InputOption('no-custom-installers', null, InputOption::VALUE_NONE, 'DEPRECATED: Use no-plugins instead.'),
+new InputOption('no-install', null, InputOption::VALUE_NONE, 'Skip the install step after updating the composer.lock file.'),
 new InputOption('no-autoloader', null, InputOption::VALUE_NONE, 'Skips autoloader generation'),
 new InputOption('no-scripts', null, InputOption::VALUE_NONE, 'Skips the execution of all scripts defined in composer.json file.'),
+new InputOption('no-suggest', null, InputOption::VALUE_NONE, 'DEPRECATED: This flag does not exist anymore.'),
 new InputOption('no-progress', null, InputOption::VALUE_NONE, 'Do not output download progress.'),
-new InputOption('no-suggest', null, InputOption::VALUE_NONE, 'Do not show package suggestions.'),
-new InputOption('with-dependencies', null, InputOption::VALUE_NONE, 'Add also dependencies of whitelisted packages to the whitelist, except those defined in root package.'),
-new InputOption('with-all-dependencies', null, InputOption::VALUE_NONE, 'Add also all dependencies of whitelisted packages to the whitelist, including those defined in root package.'),
+new InputOption('with-dependencies', null, InputOption::VALUE_NONE, 'Update also dependencies of packages in the argument list, except those which are root requirements.'),
+new InputOption('with-all-dependencies', null, InputOption::VALUE_NONE, 'Update also dependencies of packages in the argument list, including those which are root requirements.'),
 new InputOption('verbose', 'v|vv|vvv', InputOption::VALUE_NONE, 'Shows more details including new commits pulled in when updating packages.'),
 new InputOption('optimize-autoloader', 'o', InputOption::VALUE_NONE, 'Optimize autoloader during autoloader dump.'),
 new InputOption('classmap-authoritative', 'a', InputOption::VALUE_NONE, 'Autoload classes from the classmap only. Implicitly enables `--optimize-autoloader`.'),
 new InputOption('apcu-autoloader', null, InputOption::VALUE_NONE, 'Use APCu to cache found/not-found classes.'),
-new InputOption('ignore-platform-reqs', null, InputOption::VALUE_NONE, 'Ignore platform requirements (php & ext- packages).'),
+new InputOption('ignore-platform-req', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Ignore a specific platform requirement (php & ext- packages).'),
+new InputOption('ignore-platform-reqs', null, InputOption::VALUE_NONE, 'Ignore all platform requirements (php & ext- packages).'),
 new InputOption('prefer-stable', null, InputOption::VALUE_NONE, 'Prefer stable versions of dependencies.'),
 new InputOption('prefer-lowest', null, InputOption::VALUE_NONE, 'Prefer lowest versions of dependencies.'),
 new InputOption('interactive', 'i', InputOption::VALUE_NONE, 'Interactive interface with autocompletion to select the packages to update.'),
@@ -79,8 +85,17 @@ from a specific vendor:
 
 <info>php composer.phar update vendor/package1 foo/* [...]</info>
 
+To run an update with more restrictive constraints you can use:
+
+<info>php composer.phar update --with vendor/package:1.0.*</info>
+
+To run a partial update with more restrictive constraints you can use the shorthand:
+
+<info>php composer.phar update vendor/package:1.0.*</info>
+
 To select packages names interactively with auto-completion use <info>-i</info>.
 
+Read more at https://getcomposer.org/doc/03-cli.md#update-u
 EOT
 )
 ;
@@ -89,41 +104,83 @@ EOT
 protected function execute(InputInterface $input, OutputInterface $output)
 {
 $io = $this->getIO();
-if ($input->getOption('no-custom-installers')) {
-$io->writeError('<warning>You are using the deprecated option "no-custom-installers". Use "no-plugins" instead.</warning>');
-$input->setOption('no-plugins', true);
-}
-
 if ($input->getOption('dev')) {
-$io->writeError('<warning>You are using the deprecated option "dev". Dev packages are installed by default now.</warning>');
+$io->writeError('<warning>You are using the deprecated option "--dev". It has no effect and will break in Composer 3.</warning>');
+}
+if ($input->getOption('no-suggest')) {
+$io->writeError('<warning>You are using the deprecated option "--no-suggest". It has no effect and will break in Composer 3.</warning>');
 }
 
 $composer = $this->getComposer(true, $input->getOption('no-plugins'));
 
 $packages = $input->getArgument('packages');
+$reqs = $this->formatRequirements($input->getOption('with'));
+
+
+ if ($packages) {
+$allowlistPackagesWithRequirements = array_filter($packages, function ($pkg) {
+return preg_match('{\S+[ =:]\S+}', $pkg) > 0;
+});
+foreach ($this->formatRequirements($allowlistPackagesWithRequirements) as $package => $constraint) {
+$reqs[$package] = $constraint;
+}
+
+
+ foreach ($allowlistPackagesWithRequirements as $package) {
+$packageName = preg_replace('{^([^ =:]+)[ =:].*$}', '$1', $package);
+$index = array_search($package, $packages);
+$packages[$index] = $packageName;
+}
+}
+
+$rootRequires = $composer->getPackage()->getRequires();
+$rootDevRequires = $composer->getPackage()->getDevRequires();
+foreach ($reqs as $package => $constraint) {
+if (isset($rootRequires[$package])) {
+$rootRequires[$package] = $this->appendConstraintToLink($rootRequires[$package], $constraint);
+} elseif (isset($rootDevRequires[$package])) {
+$rootDevRequires[$package] = $this->appendConstraintToLink($rootDevRequires[$package], $constraint);
+} else {
+throw new \UnexpectedValueException('Only root package requirements can receive temporary constraints and '.$package.' is not one');
+}
+}
+$composer->getPackage()->setRequires($rootRequires);
+$composer->getPackage()->setDevRequires($rootDevRequires);
 
 if ($input->getOption('interactive')) {
 $packages = $this->getPackagesInteractively($io, $input, $output, $composer, $packages);
 }
 
 if ($input->getOption('root-reqs')) {
-$require = array_keys($composer->getPackage()->getRequires());
+$requires = array_keys($rootRequires);
 if (!$input->getOption('no-dev')) {
-$requireDev = array_keys($composer->getPackage()->getDevRequires());
-$require = array_merge($require, $requireDev);
+$requires = array_merge($requires, array_keys($rootDevRequires));
 }
 
 if (!empty($packages)) {
-$packages = array_intersect($packages, $require);
+$packages = array_intersect($packages, $requires);
 } else {
-$packages = $require;
+$packages = $requires;
 }
 }
 
-$composer->getDownloadManager()->setOutputProgress(!$input->getOption('no-progress'));
+
+ 
+ $filteredPackages = array_filter($packages, function ($package) {
+return !in_array($package, array('lock', 'nothing', 'mirrors'), true);
+});
+$updateMirrors = $input->getOption('lock') || count($filteredPackages) != count($packages);
+$packages = $filteredPackages;
+
+if ($updateMirrors && !empty($packages)) {
+$io->writeError('<error>You cannot simultaneously update only a selection of packages and regenerate the lock file metadata.</error>');
+return -1;
+}
 
 $commandEvent = new CommandEvent(PluginEvents::COMMAND, 'update', $input, $output);
 $composer->getEventDispatcher()->dispatch($commandEvent->getName(), $commandEvent);
+
+$composer->getInstallationManager()->setOutputProgress(!$input->getOption('no-progress'));
 
 $install = Installer::create($io, $composer);
 
@@ -134,6 +191,15 @@ $optimize = $input->getOption('optimize-autoloader') || $config->get('optimize-a
 $authoritative = $input->getOption('classmap-authoritative') || $config->get('classmap-authoritative');
 $apcu = $input->getOption('apcu-autoloader') || $config->get('apcu-autoloader');
 
+$updateAllowTransitiveDependencies = Request::UPDATE_ONLY_LISTED;
+if ($input->getOption('with-all-dependencies')) {
+$updateAllowTransitiveDependencies = Request::UPDATE_LISTED_WITH_TRANSITIVE_DEPS;
+} elseif ($input->getOption('with-dependencies')) {
+$updateAllowTransitiveDependencies = Request::UPDATE_LISTED_WITH_TRANSITIVE_DEPS_NO_ROOT_REQUIRE;
+}
+
+$ignorePlatformReqs = $input->getOption('ignore-platform-reqs') ?: ($input->getOption('ignore-platform-req') ?: false);
+
 $install
 ->setDryRun($input->getOption('dry-run'))
 ->setVerbose($input->getOption('verbose'))
@@ -142,15 +208,15 @@ $install
 ->setDevMode(!$input->getOption('no-dev'))
 ->setDumpAutoloader(!$input->getOption('no-autoloader'))
 ->setRunScripts(!$input->getOption('no-scripts'))
-->setSkipSuggest($input->getOption('no-suggest'))
 ->setOptimizeAutoloader($optimize)
 ->setClassMapAuthoritative($authoritative)
 ->setApcuAutoloader($apcu)
 ->setUpdate(true)
-->setUpdateWhitelist($input->getOption('lock') ? array('lock') : $packages)
-->setWhitelistTransitiveDependencies($input->getOption('with-dependencies'))
-->setWhitelistAllDependencies($input->getOption('with-all-dependencies'))
-->setIgnorePlatformRequirements($input->getOption('ignore-platform-reqs'))
+->setInstall(!$input->getOption('no-install'))
+->setUpdateMirrors($updateMirrors)
+->setUpdateAllowList($packages)
+->setUpdateAllowTransitiveDependencies($updateAllowTransitiveDependencies)
+->setIgnorePlatformRequirements($ignorePlatformReqs)
 ->setPreferStable($input->getOption('prefer-stable'))
 ->setPreferLowest($input->getOption('prefer-lowest'))
 ;
@@ -223,5 +289,20 @@ return $packages;
 }
 
 throw new \RuntimeException('Installation aborted.');
+}
+
+private function appendConstraintToLink(Link $link, $constraint)
+{
+$parser = new VersionParser;
+$oldPrettyString = $link->getConstraint()->getPrettyString();
+$newConstraint = MultiConstraint::create(array($link->getConstraint(), $parser->parseConstraints($constraint)), true);
+$newConstraint->setPrettyString($oldPrettyString.', '.$constraint);
+return new Link(
+$link->getSource(),
+$link->getTarget(),
+$newConstraint,
+$link->getDescription(),
+$link->getPrettyConstraint() . ', ' . $constraint
+);
 }
 }

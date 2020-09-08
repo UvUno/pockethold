@@ -23,7 +23,15 @@ class FossilDownloader extends VcsDownloader
 
 
 
-public function doDownload(PackageInterface $package, $path, $url)
+protected function doDownload(PackageInterface $package, $path, $url, PackageInterface $prevPackage = null)
+{
+
+}
+
+
+
+
+protected function doInstall(PackageInterface $package, $path, $url)
 {
 
  $this->config->prohibitUrlByConfig($url, $this->io);
@@ -49,7 +57,7 @@ throw new \RuntimeException('Failed to execute ' . $command . "\n\n" . $this->pr
 
 
 
-public function doUpdate(PackageInterface $initial, PackageInterface $target, $path, $url)
+protected function doUpdate(PackageInterface $initial, PackageInterface $target, $path, $url)
 {
 
  $this->config->prohibitUrlByConfig($url, $this->io);

@@ -1,5 +1,5 @@
 {
-    "$schema": "http://json-schema.org/draft-04/schema#",
+    "$schema": "https://json-schema.org/draft-04/schema#",
     "name": "Package",
     "type": "object",
     "additionalProperties": false,
@@ -7,11 +7,13 @@
     "properties": {
         "name": {
             "type": "string",
-            "description": "Package name, including 'vendor-name/' prefix."
+            "description": "Package name, including 'vendor-name/' prefix.",
+            "pattern": "^[a-z0-9]([_.-]?[a-z0-9]+)*/[a-z0-9](([_.]?|-{0,2})[a-z0-9]+)*$"
         },
         "type": {
             "description": "Package type, either 'library' for common packages, 'composer-plugin' for plugins, 'metapackage' for empty packages, or a custom type ([a-z0-9-]+) defined by whatever project this package applies to.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
         },
         "target-dir": {
             "description": "DEPRECATED: Forces the package to be installed into the given subdirectory path. This is used for autoloading PSR-0 packages that do not contain their full path. Use forward slashes for cross-platform compatibility.",
@@ -39,7 +41,8 @@
         },
         "version": {
             "type": "string",
-            "description": "Package version, see https://getcomposer.org/doc/04-schema.md#version for more info on valid schemes."
+            "description": "Package version, see https://getcomposer.org/doc/04-schema.md#version for more info on valid schemes.",
+            "pattern": "^v?\\d+(((\\.\\d+)?\\.\\d+)?\\.\\d+)?|^dev-"
         },
         "time": {
             "type": "string",
@@ -138,7 +141,16 @@
                 "gitlab-token": {
                     "type": "object",
                     "description": "A hash of domain name => gitlab private tokens, typically {\"gitlab.com\":\"<token>\"}.",
-                    "additionalProperties": true
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "bearer": {
+                    "type": "object",
+                    "description": "A hash of domain name => bearer authentication token, for example {\"example.com\":\"<token>\"}.",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
                 "disable-tls": {
                     "type": "boolean",
@@ -271,6 +283,10 @@
                         "type": "string"
                     }
                 },
+                "use-github-api": {
+                    "type": "boolean",
+                    "description": "Defaults to true.  If set to false, globally disables the use of the GitHub API for all GitHub repositories and clones the repository as it would for any other repository."
+                },
                 "archive-format": {
                     "type": "string",
                     "description": "The default archiving format when not provided on cli, defaults to \"tar\"."
@@ -286,6 +302,14 @@
                 "sort-packages": {
                     "type": "boolean",
                     "description": "Defaults to false. If set to true, Composer will sort packages when adding/updating a new dependency."
+                },
+                "lock": {
+                    "type": "boolean",
+                    "description": "Defaults to true. If set to false, Composer will not create a composer.lock file."
+                },
+                "platform-check": {
+                    "type": "boolean",
+                    "description": "Defaults to true. If set to false, Composer will not create and require a platform_check.php file as part of the autoloader bootstrap."
                 }
             }
         },
@@ -335,6 +359,10 @@
             "type": ["object"],
             "description": "Options for creating package archives for distribution.",
             "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "A base name for archive."
+                },
                 "exclude": {
                     "type": "array",
                     "description": "A list of patterns for paths to exclude or include if prefixed with an exclamation mark."
@@ -490,6 +518,11 @@
                     "description": "IRC channel for support, as irc://server/channel.",
                     "format": "uri"
                 },
+                "chat": {
+                    "type": "string",
+                    "description": "URL to the support chat.",
+                    "format": "uri"
+                },
                 "source": {
                     "type": "string",
                     "description": "URL to browse or download the sources.",
@@ -507,12 +540,34 @@
                 }
             }
         },
+        "funding": {
+            "type": "array",
+            "description": "A list of options to fund the development and maintenance of the package.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "Type of funding or platform through which funding is possible."
+                    },
+                    "url": {
+                        "type": "string",
+                        "description": "URL to a website with details on funding and a way to fund the package.",
+                        "format": "uri"
+                    }
+                }
+            }
+        },
         "non-feature-branches": {
             "type": ["array"],
             "description": "A set of string or regex patterns for non-numeric branch names that will not be handled as feature branches.",
             "items": {
                 "type": "string"
             }
+        },
+        "default-branch": {
+            "type": ["boolean"],
+            "description": "Internal use only, do not specify this in composer.json. Indicates whether this version is the default branch of the linked VCS repository. Defaults to false."
         },
         "abandoned": {
             "type": ["boolean", "string"],
@@ -608,6 +663,19 @@
             "properties": {
                 "type": { "type": "string", "enum": ["composer"] },
                 "url": { "type": "string" },
+                "canonical": { "type": "boolean" },
+                "only": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "exclude": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "options": {
                     "type": "object",
                     "additionalProperties": true
@@ -622,6 +690,19 @@
             "properties": {
                 "type": { "type": "string", "enum": ["vcs", "github", "git", "gitlab", "git-bitbucket", "hg", "hg-bitbucket", "fossil", "perforce", "svn"] },
                 "url": { "type": "string" },
+                "canonical": { "type": "boolean" },
+                "only": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "exclude": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "no-api": { "type": "boolean" },
                 "secure-http": { "type": "boolean" },
                 "svn-cache-credentials": { "type": "boolean" },
@@ -642,6 +723,19 @@
             "properties": {
                 "type": { "type": "string", "enum": ["path"] },
                 "url": { "type": "string" },
+                "canonical": { "type": "boolean" },
+                "only": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "exclude": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "options": {
                     "type": "object",
                     "properties": {
@@ -656,7 +750,20 @@
             "required": ["type", "url"],
             "properties": {
                 "type": { "type": "string", "enum": ["artifact"] },
-                "url": { "type": "string" }
+                "url": { "type": "string" },
+                "canonical": { "type": "boolean" },
+                "only": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "exclude": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
             }
         },
         "pear-repository": {
@@ -665,6 +772,19 @@
             "properties": {
                 "type": { "type": "string", "enum": ["pear"] },
                 "url": { "type": "string" },
+                "canonical": { "type": "boolean" },
+                "only": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "exclude": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "vendor-alias": { "type": "string" }
             }
         },
@@ -673,6 +793,19 @@
             "required": ["type", "package"],
             "properties": {
                 "type": { "type": "string", "enum": ["package"] },
+                "canonical": { "type": "boolean" },
+                "only": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "exclude": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "package": {
                     "oneOf": [
                         { "$ref": "#/definitions/inline-package" },

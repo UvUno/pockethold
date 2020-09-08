@@ -19,8 +19,9 @@ use Composer\Factory;
 use Composer\IO\IOInterface;
 use Composer\Json\JsonFile;
 use Composer\Util\ProcessExecutor;
-use Composer\Util\RemoteFilesystem;
+use Composer\Util\HttpDownloader;
 use Composer\Util\Filesystem;
+use Composer\Util\Http\Response;
 
 
 
@@ -42,7 +43,7 @@ protected $config;
 
 protected $process;
 
-protected $remoteFilesystem;
+protected $httpDownloader;
 
 protected $infoCache = array();
 
@@ -57,7 +58,7 @@ protected $cache;
 
 
 
-final public function __construct(array $repoConfig, IOInterface $io, Config $config, ProcessExecutor $process = null, RemoteFilesystem $remoteFilesystem = null)
+final public function __construct(array $repoConfig, IOInterface $io, Config $config, HttpDownloader $httpDownloader, ProcessExecutor $process)
 {
 if (Filesystem::isLocalPath($repoConfig['url'])) {
 $repoConfig['url'] = Filesystem::getPlatformPath($repoConfig['url']);
@@ -68,8 +69,8 @@ $this->originUrl = $repoConfig['url'];
 $this->repoConfig = $repoConfig;
 $this->io = $io;
 $this->config = $config;
-$this->process = $process ?: new ProcessExecutor($io);
-$this->remoteFilesystem = $remoteFilesystem ?: Factory::createRemoteFilesystem($this->io, $config);
+$this->httpDownloader = $httpDownloader;
+$this->process = $process;
 }
 
 
@@ -80,7 +81,7 @@ $this->remoteFilesystem = $remoteFilesystem ?: Factory::createRemoteFilesystem($
 
 protected function shouldCache($identifier)
 {
-return $this->cache && preg_match('{[a-f0-9]{40}}i', $identifier);
+return $this->cache && preg_match('{^[a-f0-9]{40}$}iD', $identifier);
 }
 
 
@@ -162,7 +163,7 @@ protected function getContents($url)
 {
 $options = isset($this->repoConfig['options']) ? $this->repoConfig['options'] : array();
 
-return $this->remoteFilesystem->getContents($this->originUrl, $url, false, $options);
+return $this->httpDownloader->get($url, $options);
 }
 
 

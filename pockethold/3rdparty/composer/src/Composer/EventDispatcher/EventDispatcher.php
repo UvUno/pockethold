@@ -13,18 +13,22 @@
 namespace Composer\EventDispatcher;
 
 use Composer\DependencyResolver\PolicyInterface;
-use Composer\DependencyResolver\Pool;
 use Composer\DependencyResolver\Request;
+use Composer\DependencyResolver\Pool;
+use Composer\DependencyResolver\Transaction;
 use Composer\Installer\InstallerEvent;
 use Composer\IO\IOInterface;
 use Composer\Composer;
 use Composer\DependencyResolver\Operation\OperationInterface;
 use Composer\Repository\CompositeRepository;
+use Composer\Repository\RepositoryInterface;
+use Composer\Repository\RepositorySet;
 use Composer\Script;
 use Composer\Installer\PackageEvent;
 use Composer\Installer\BinaryInstaller;
 use Composer\Util\ProcessExecutor;
 use Composer\Script\Event as ScriptEvent;
+use Composer\ClassLoader;
 use Symfony\Component\Process\PhpExecutableFinder;
 
 
@@ -42,11 +46,17 @@ use Symfony\Component\Process\PhpExecutableFinder;
 
 class EventDispatcher
 {
+
 protected $composer;
+
 protected $io;
+
 protected $loader;
+
 protected $process;
-protected $listeners;
+
+protected $listeners = array();
+
 private $eventStack;
 
 
@@ -108,12 +118,9 @@ return $this->doDispatch(new Script\Event($eventName, $this->composer, $this->io
 
 
 
-
-
-
-public function dispatchPackageEvent($eventName, $devMode, PolicyInterface $policy, Pool $pool, CompositeRepository $installedRepo, Request $request, array $operations, OperationInterface $operation)
+public function dispatchPackageEvent($eventName, $devMode, RepositoryInterface $localRepo, array $operations, OperationInterface $operation)
 {
-return $this->doDispatch(new PackageEvent($eventName, $this->composer, $this->io, $devMode, $policy, $pool, $installedRepo, $request, $operations, $operation));
+return $this->doDispatch(new PackageEvent($eventName, $this->composer, $this->io, $devMode, $localRepo, $operations, $operation));
 }
 
 
@@ -127,12 +134,9 @@ return $this->doDispatch(new PackageEvent($eventName, $this->composer, $this->io
 
 
 
-
-
-
-public function dispatchInstallerEvent($eventName, $devMode, PolicyInterface $policy, Pool $pool, CompositeRepository $installedRepo, Request $request, array $operations = array())
+public function dispatchInstallerEvent($eventName, $devMode, $executeOperations, Transaction $transaction)
 {
-return $this->doDispatch(new InstallerEvent($eventName, $this->composer, $this->io, $devMode, $policy, $pool, $installedRepo, $request, $operations));
+return $this->doDispatch(new InstallerEvent($eventName, $this->composer, $this->io, $devMode, $executeOperations, $transaction));
 }
 
 
@@ -145,43 +149,37 @@ return $this->doDispatch(new InstallerEvent($eventName, $this->composer, $this->
 
 protected function doDispatch(Event $event)
 {
-$pathStr = 'PATH';
-if (!isset($_SERVER[$pathStr]) && isset($_SERVER['Path'])) {
-$pathStr = 'Path';
-}
-
-
- $binDir = $this->composer->getConfig()->get('bin-dir');
-if (is_dir($binDir)) {
-$binDir = realpath($binDir);
-if (isset($_SERVER[$pathStr]) && !preg_match('{(^|'.PATH_SEPARATOR.')'.preg_quote($binDir).'($|'.PATH_SEPARATOR.')}', $_SERVER[$pathStr])) {
-$_SERVER[$pathStr] = $binDir.PATH_SEPARATOR.getenv($pathStr);
-putenv($pathStr.'='.$_SERVER[$pathStr]);
-}
-}
-
 $listeners = $this->getListeners($event);
 
 $this->pushEvent($event);
 
 $return = 0;
 foreach ($listeners as $callable) {
+
+$this->ensureBinDirIsInPath();
+
 if (!is_string($callable)) {
 if (!is_callable($callable)) {
 $className = is_object($callable[0]) ? get_class($callable[0]) : $callable[0];
 
 throw new \RuntimeException('Subscriber '.$className.'::'.$callable[1].' for event '.$event->getName().' is not callable, make sure the function is defined and public');
 }
-$event = $this->checkListenerExpectedEvent($callable, $event);
+if (is_array($callable) && (is_string($callable[0]) || is_object($callable[0])) && is_string($callable[1])) {
+$this->io->writeError(sprintf('> %s: %s', $event->getName(), (is_object($callable[0]) ? get_class($callable[0]) : $callable[0]).'->'.$callable[1] ), true, IOInterface::VERBOSE);
+}
 $return = false === call_user_func($callable, $event) ? 1 : 0;
 } elseif ($this->isComposerScript($callable)) {
 $this->io->writeError(sprintf('> %s: %s', $event->getName(), $callable), true, IOInterface::VERBOSE);
-$scriptName = substr($callable, 1);
-$args = $event->getArguments();
+
+$script = explode(' ', substr($callable, 1));
+$scriptName = $script[0];
+unset($script[0]);
+
+$args = array_merge($script, $event->getArguments());
 $flags = $event->getFlags();
 if (substr($callable, 0, 10) === '@composer ') {
-$exec = $this->getPhpExecCommand() . ' ' . ProcessExecutor::escape(getenv('COMPOSER_BINARY')) . substr($callable, 9);
-if (0 !== ($exitCode = $this->process->execute($exec))) {
+$exec = $this->getPhpExecCommand() . ' ' . ProcessExecutor::escape(getenv('COMPOSER_BINARY')) . ' ' . implode(' ', $args);
+if (0 !== ($exitCode = $this->executeTty($exec))) {
 $this->io->writeError(sprintf('<error>Script %s handling the %s event returned with error code '.$exitCode.'</error>', $callable, $event->getName()), true, IOInterface::QUIET);
 
 throw new ScriptExecutionException('Error Output: '.$this->process->getErrorOutput(), $exitCode);
@@ -192,7 +190,10 @@ $this->io->writeError(sprintf('<warning>You made a reference to a non-existent s
 }
 
 try {
-$return = $this->dispatch($scriptName, new Script\Event($scriptName, $event->getComposer(), $event->getIO(), $event->isDevMode(), $args, $flags));
+
+$scriptEvent = new Script\Event($scriptName, $event->getComposer(), $event->getIO(), $event->isDevMode(), $args, $flags);
+$scriptEvent->setOriginatingEvent($event);
+$return = $this->dispatch($scriptName, $scriptEvent);
 } catch (ScriptExecutionException $e) {
 $this->io->writeError(sprintf('<error>Script %s was called via %s</error>', $callable, $event->getName()), true, IOInterface::QUIET);
 throw $e;
@@ -238,11 +239,29 @@ break;
 }
 }
 
-if (substr($exec, 0, 5) === '@php ') {
+if (substr($exec, 0, 8) === '@putenv ') {
+putenv(substr($exec, 8));
+
+continue;
+} elseif (substr($exec, 0, 5) === '@php ') {
 $exec = $this->getPhpExecCommand() . ' ' . substr($exec, 5);
+} else {
+$finder = new PhpExecutableFinder();
+$phpPath = $finder->find(false);
+if ($phpPath) {
+$_SERVER['PHP_BINARY'] = $phpPath;
+putenv('PHP_BINARY=' . $_SERVER['PHP_BINARY']);
+}
 }
 
-if (0 !== ($exitCode = $this->process->execute($exec))) {
+
+ 
+ 
+ if (substr($exec, 0, 9) === 'composer ') {
+$exec = $this->getPhpExecCommand() . ' ' . ProcessExecutor::escape(getenv('COMPOSER_BINARY')) . substr($exec, 8);
+}
+
+if (0 !== ($exitCode = $this->executeTty($exec))) {
 $this->io->writeError(sprintf('<error>Script %s handling the %s event returned with error code '.$exitCode.'</error>', $callable, $event->getName()), true, IOInterface::QUIET);
 
 throw new ScriptExecutionException('Error Output: '.$this->process->getErrorOutput(), $exitCode);
@@ -259,19 +278,29 @@ $this->popEvent();
 return $return;
 }
 
+protected function executeTty($exec)
+{
+if ($this->io->isInteractive()) {
+return $this->process->executeTty($exec);
+}
+
+return $this->process->execute($exec);
+}
+
 protected function getPhpExecCommand()
 {
 $finder = new PhpExecutableFinder();
-$phpPath = $finder->find();
+$phpPath = $finder->find(false);
 if (!$phpPath) {
-throw new \RuntimeException('Failed to locate PHP binary to execute '.$scriptName);
+throw new \RuntimeException('Failed to locate PHP binary to execute '.$phpPath);
 }
-
+$phpArgs = $finder->findArguments();
+$phpArgs = $phpArgs ? ' ' . implode(' ', $phpArgs) : '';
 $allowUrlFOpenFlag = ' -d allow_url_fopen=' . ProcessExecutor::escape(ini_get('allow_url_fopen'));
 $disableFunctionsFlag = ' -d disable_functions=' . ProcessExecutor::escape(ini_get('disable_functions'));
 $memoryLimitFlag = ' -d memory_limit=' . ProcessExecutor::escape(ini_get('memory_limit'));
 
-return ProcessExecutor::escape($phpPath) . $allowUrlFOpenFlag . $disableFunctionsFlag . $memoryLimitFlag;
+return ProcessExecutor::escape($phpPath) . $phpArgs . $allowUrlFOpenFlag . $disableFunctionsFlag . $memoryLimitFlag;
 }
 
 
@@ -281,8 +310,6 @@ return ProcessExecutor::escape($phpPath) . $allowUrlFOpenFlag . $disableFunction
 
 protected function executeEventPhpScript($className, $methodName, Event $event)
 {
-$event = $this->checkListenerExpectedEvent(array($className, $methodName), $event);
-
 if ($this->io->isVerbose()) {
 $this->io->writeError(sprintf('> %s: %s::%s', $event->getName(), $className, $methodName));
 } else {
@@ -290,76 +317,6 @@ $this->io->writeError(sprintf('> %s::%s', $className, $methodName));
 }
 
 return $className::$methodName($event);
-}
-
-
-
-
-
-
-protected function checkListenerExpectedEvent($target, Event $event)
-{
-if (in_array($event->getName(), array(
-'init',
-'command',
-'pre-file-download',
-), true)) {
-return $event;
-}
-
-try {
-$reflected = new \ReflectionParameter($target, 0);
-} catch (\Exception $e) {
-return $event;
-}
-
-$typehint = $reflected->getClass();
-
-if (!$typehint instanceof \ReflectionClass) {
-return $event;
-}
-
-$expected = $typehint->getName();
-
-
- if (!$event instanceof $expected && $expected === 'Composer\Script\CommandEvent') {
-trigger_error('The callback '.$this->serializeCallback($target).' declared at '.$reflected->getDeclaringFunction()->getFileName().' accepts a '.$expected.' but '.$event->getName().' events use a '.get_class($event).' instance. Please adjust your type hint accordingly, see https://getcomposer.org/doc/articles/scripts.md#event-classes', E_USER_DEPRECATED);
-$event = new \Composer\Script\CommandEvent(
-$event->getName(),
-$event->getComposer(),
-$event->getIO(),
-$event->isDevMode(),
-$event->getArguments()
-);
-}
-if (!$event instanceof $expected && $expected === 'Composer\Script\PackageEvent') {
-trigger_error('The callback '.$this->serializeCallback($target).' declared at '.$reflected->getDeclaringFunction()->getFileName().' accepts a '.$expected.' but '.$event->getName().' events use a '.get_class($event).' instance. Please adjust your type hint accordingly, see https://getcomposer.org/doc/articles/scripts.md#event-classes', E_USER_DEPRECATED);
-$event = new \Composer\Script\PackageEvent(
-$event->getName(),
-$event->getComposer(),
-$event->getIO(),
-$event->isDevMode(),
-$event->getPolicy(),
-$event->getPool(),
-$event->getInstalledRepo(),
-$event->getRequest(),
-$event->getOperations(),
-$event->getOperation()
-);
-}
-if (!$event instanceof $expected && $expected === 'Composer\Script\Event') {
-trigger_error('The callback '.$this->serializeCallback($target).' declared at '.$reflected->getDeclaringFunction()->getFileName().' accepts a '.$expected.' but '.$event->getName().' events use a '.get_class($event).' instance. Please adjust your type hint accordingly, see https://getcomposer.org/doc/articles/scripts.md#event-classes', E_USER_DEPRECATED);
-$event = new \Composer\Script\Event(
-$event->getName(),
-$event->getComposer(),
-$event->getIO(),
-$event->isDevMode(),
-$event->getArguments(),
-$event->getFlags()
-);
-}
-
-return $event;
 }
 
 private function serializeCallback($cb)
@@ -389,6 +346,22 @@ return var_export($cb, true);
 public function addListener($eventName, $listener, $priority = 0)
 {
 $this->listeners[$eventName][$priority][] = $listener;
+}
+
+
+
+
+public function removeListener($listener)
+{
+foreach ($this->listeners as $eventName => $priorities) {
+foreach ($priorities as $priority => $listeners) {
+foreach ($listeners as $index => $candidate) {
+if ($listener === $candidate || (is_array($candidate) && is_object($listener) && $candidate[0] === $listener)) {
+unset($this->listeners[$eventName][$priority][$index]);
+}
+}
+}
+}
 }
 
 
@@ -499,7 +472,7 @@ return false === strpos($callable, ' ') && false !== strpos($callable, '::');
 
 protected function isComposerScript($callable)
 {
-return '@' === substr($callable, 0, 1) && '@php ' !== substr($callable, 0, 5);
+return '@' === substr($callable, 0, 1) && '@php ' !== substr($callable, 0, 5) && '@putenv ' !== substr($callable, 0, 8);
 }
 
 
@@ -527,5 +500,23 @@ return array_push($this->eventStack, $eventName);
 protected function popEvent()
 {
 return array_pop($this->eventStack);
+}
+
+private function ensureBinDirIsInPath()
+{
+$pathStr = 'PATH';
+if (!isset($_SERVER[$pathStr]) && isset($_SERVER['Path'])) {
+$pathStr = 'Path';
+}
+
+
+ $binDir = $this->composer->getConfig()->get('bin-dir');
+if (is_dir($binDir)) {
+$binDir = realpath($binDir);
+if (isset($_SERVER[$pathStr]) && !preg_match('{(^|'.PATH_SEPARATOR.')'.preg_quote($binDir).'($|'.PATH_SEPARATOR.')}', $_SERVER[$pathStr])) {
+$_SERVER[$pathStr] = $binDir.PATH_SEPARATOR.getenv($pathStr);
+putenv($pathStr.'='.$_SERVER[$pathStr]);
+}
+}
 }
 }

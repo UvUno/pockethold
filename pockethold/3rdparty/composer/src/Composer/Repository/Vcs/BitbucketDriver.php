@@ -16,6 +16,7 @@ use Composer\Cache;
 use Composer\Downloader\TransportException;
 use Composer\Json\JsonFile;
 use Composer\Util\Bitbucket;
+use Composer\Util\Http\Response;
 
 abstract class BitbucketDriver extends VcsDriver
 {
@@ -46,7 +47,7 @@ protected $vcsType;
 
 public function initialize()
 {
-preg_match('#^https?://bitbucket\.org/([^/]+)/([^/]+?)(\.git|/?)$#', $this->url, $match);
+preg_match('#^https?://bitbucket\.org/([^/]+)/([^/]+?)(\.git|/?)$#i', $this->url, $match);
 $this->owner = $match[1];
 $this->repository = $match[2];
 $this->originUrl = 'bitbucket.org';
@@ -92,7 +93,7 @@ null,
 )
 );
 
-$repoData = JsonFile::parseJson($this->getContentsWithOAuthCredentials($resource, true), $resource);
+$repoData = $this->fetchWithOAuthCredentials($resource, true)->decodeJson();
 if ($this->fallbackDriver) {
 return false;
 }
@@ -119,11 +120,16 @@ return $this->fallbackDriver->getComposerInformation($identifier);
 
 if (!isset($this->infoCache[$identifier])) {
 if ($this->shouldCache($identifier) && $res = $this->cache->read($identifier)) {
-return $this->infoCache[$identifier] = JsonFile::parseJson($res);
-}
-
+$composer = JsonFile::parseJson($res);
+} else {
 $composer = $this->getBaseComposerInformation($identifier);
 
+if ($this->shouldCache($identifier)) {
+$this->cache->write($identifier, json_encode($composer));
+}
+}
+
+if ($composer) {
 
  if (!isset($composer['support']['source'])) {
 $label = array_search(
@@ -169,12 +175,9 @@ $this->repository
 if (!isset($composer['homepage'])) {
 $composer['homepage'] = empty($this->website) ? $this->homeUrl : $this->website;
 }
+}
 
 $this->infoCache[$identifier] = $composer;
-
-if ($this->shouldCache($identifier)) {
-$this->cache->write($identifier, json_encode($composer));
-}
 }
 
 return $this->infoCache[$identifier];
@@ -189,15 +192,22 @@ if ($this->fallbackDriver) {
 return $this->fallbackDriver->getFileContent($file, $identifier);
 }
 
+if (strpos($identifier, '/') !== false) {
+$branches = $this->getBranches();
+if (isset($branches[$identifier])) {
+$identifier = $branches[$identifier];
+}
+}
+
 $resource = sprintf(
-'https://api.bitbucket.org/1.0/repositories/%s/%s/raw/%s/%s',
+'https://api.bitbucket.org/2.0/repositories/%s/%s/src/%s/%s',
 $this->owner,
 $this->repository,
 $identifier,
 $file
 );
 
-return $this->getContentsWithOAuthCredentials($resource);
+return $this->fetchWithOAuthCredentials($resource)->getBody();
 }
 
 
@@ -209,13 +219,20 @@ if ($this->fallbackDriver) {
 return $this->fallbackDriver->getChangeDate($identifier);
 }
 
+if (strpos($identifier, '/') !== false) {
+$branches = $this->getBranches();
+if (isset($branches[$identifier])) {
+$identifier = $branches[$identifier];
+}
+}
+
 $resource = sprintf(
 'https://api.bitbucket.org/2.0/repositories/%s/%s/commit/%s?fields=date',
 $this->owner,
 $this->repository,
 $identifier
 );
-$commit = JsonFile::parseJson($this->getContentsWithOAuthCredentials($resource), $resource);
+$commit = $this->fetchWithOAuthCredentials($resource)->decodeJson();
 
 return new \DateTime($commit['date']);
 }
@@ -277,7 +294,7 @@ null,
 );
 $hasNext = true;
 while ($hasNext) {
-$tagsData = JsonFile::parseJson($this->getContentsWithOAuthCredentials($resource), $resource);
+$tagsData = $this->fetchWithOAuthCredentials($resource)->decodeJson();
 foreach ($tagsData['values'] as $data) {
 $this->tags[$data['name']] = $data['target']['hash'];
 }
@@ -321,7 +338,7 @@ null,
 );
 $hasNext = true;
 while ($hasNext) {
-$branchData = JsonFile::parseJson($this->getContentsWithOAuthCredentials($resource), $resource);
+$branchData = $this->fetchWithOAuthCredentials($resource)->decodeJson();
 foreach ($branchData['values'] as $data) {
 
  if ($this->vcsType === 'hg' && empty($data['heads'])) {
@@ -349,12 +366,12 @@ return $this->branches;
 
 
 
-protected function getContentsWithOAuthCredentials($url, $fetchingRepoData = false)
+protected function fetchWithOAuthCredentials($url, $fetchingRepoData = false)
 {
 try {
 return parent::getContents($url);
 } catch (TransportException $e) {
-$bitbucketUtil = new Bitbucket($this->io, $this->config, $this->process, $this->remoteFilesystem);
+$bitbucketUtil = new Bitbucket($this->io, $this->config, $this->process, $this->httpDownloader);
 
 if (403 === $e->getCode() || (401 === $e->getCode() && strpos($e->getMessage(), 'Could not authenticate against') === 0)) {
 if (!$this->io->hasAuthentication($this->originUrl)
@@ -364,7 +381,9 @@ return parent::getContents($url);
 }
 
 if (!$this->io->isInteractive() && $fetchingRepoData) {
-return $this->attemptCloneFallback();
+if ($this->attemptCloneFallback()) {
+return new Response(array('url' => 'dummy'), 200, array(), 'null');
+}
 }
 }
 
@@ -383,6 +402,8 @@ protected function attemptCloneFallback()
 {
 try {
 $this->setupFallbackDriver($this->generateSshUrl());
+
+return true;
 } catch (\RuntimeException $e) {
 $this->fallbackDriver = null;
 
@@ -421,11 +442,16 @@ if ($cloneLink['name'] === 'https') {
 protected function getMainBranchData()
 {
 $resource = sprintf(
-'https://api.bitbucket.org/1.0/repositories/%s/%s/main-branch',
+'https://api.bitbucket.org/2.0/repositories/%s/%s?fields=mainbranch',
 $this->owner,
 $this->repository
 );
 
-return JsonFile::parseJson($this->getContentsWithOAuthCredentials($resource), $resource);
+$data = $this->fetchWithOAuthCredentials($resource)->decodeJson();
+if (isset($data['mainbranch'])) {
+return $data['mainbranch'];
+}
+
+return null;
 }
 }

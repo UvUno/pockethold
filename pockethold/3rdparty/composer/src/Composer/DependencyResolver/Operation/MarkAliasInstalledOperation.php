@@ -52,7 +52,7 @@ return $this->package;
 
 
 
-public function getJobType()
+public function getOperationType()
 {
 return 'markAliasInstalled';
 }
@@ -60,8 +60,16 @@ return 'markAliasInstalled';
 
 
 
+public function show($lock)
+{
+return 'Marking <info>'.$this->package->getPrettyName().'</info> (<comment>'.$this->package->getFullPrettyVersion().'</comment>) as installed, alias of <info>'.$this->package->getAliasOf()->getPrettyName().'</info> (<comment>'.$this->package->getAliasOf()->getFullPrettyVersion().'</comment>)';
+}
+
+
+
+
 public function __toString()
 {
-return 'Marking '.$this->package->getPrettyName().' ('.$this->formatVersion($this->package).') as installed, alias of '.$this->package->getAliasOf()->getPrettyName().' ('.$this->formatVersion($this->package->getAliasOf()).')';
+return $this->show(false);
 }
 }

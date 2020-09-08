@@ -13,6 +13,7 @@
 namespace Composer\Repository;
 
 use Composer\Package\AliasPackage;
+use Composer\Installer\InstallationManager;
 
 
 
@@ -24,7 +25,7 @@ class WritableArrayRepository extends ArrayRepository implements WritableReposit
 
 
 
-public function write()
+public function write($devMode, InstallationManager $installationManager)
 {
 }
 

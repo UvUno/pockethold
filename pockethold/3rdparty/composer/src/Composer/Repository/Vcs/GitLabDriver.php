@@ -17,8 +17,9 @@ use Composer\Cache;
 use Composer\IO\IOInterface;
 use Composer\Json\JsonFile;
 use Composer\Downloader\TransportException;
-use Composer\Util\RemoteFilesystem;
+use Composer\Util\HttpDownloader;
 use Composer\Util\GitLab;
+use Composer\Util\Http\Response;
 
 
 
@@ -69,7 +70,7 @@ private $isPrivate = true;
 
 
 
-protected $portNumber;
+private $hasNonstandardOrigin = false;
 
 const URL_REGEX = '#^(?:(?P<scheme>https?)://(?P<domain>.+?)(?::(?P<port>[0-9]+))?/|git@(?P<domain2>[^:]+):)(?P<parts>.+)/(?P<repo>[^/]+?)(?:\.git|/)?$#';
 
@@ -94,11 +95,10 @@ $this->scheme = !empty($match['scheme'])
 ? $match['scheme']
 : (isset($this->repoConfig['secure-http']) && $this->repoConfig['secure-http'] === false ? 'http' : 'https')
 ;
-$this->originUrl = $this->determineOrigin($configuredDomains, $guessedDomain, $urlParts);
+$this->originUrl = $this->determineOrigin($configuredDomains, $guessedDomain, $urlParts, $match['port']);
 
-if (!empty($match['port']) && true === is_numeric($match['port'])) {
-
- $this->portNumber = (int) $match['port'];
+if (false !== strpos($this->originUrl, ':') || false !== strpos($this->originUrl, '/')) {
+$this->hasNonstandardOrigin = true;
 }
 
 $this->namespace = implode('/', $urlParts);
@@ -115,9 +115,45 @@ $this->fetchProject();
 
 
 
-public function setRemoteFilesystem(RemoteFilesystem $remoteFilesystem)
+public function setHttpDownloader(HttpDownloader $httpDownloader)
 {
-$this->remoteFilesystem = $remoteFilesystem;
+$this->httpDownloader = $httpDownloader;
+}
+
+
+
+
+public function getComposerInformation($identifier)
+{
+if ($this->gitDriver) {
+return $this->gitDriver->getComposerInformation($identifier);
+}
+
+if (!isset($this->infoCache[$identifier])) {
+if ($this->shouldCache($identifier) && $res = $this->cache->read($identifier)) {
+$composer = JsonFile::parseJson($res);
+} else {
+$composer = $this->getBaseComposerInformation($identifier);
+
+if ($this->shouldCache($identifier)) {
+$this->cache->write($identifier, json_encode($composer));
+}
+}
+
+if ($composer) {
+
+ if (!isset($composer['support']['issues']) && isset($this->project['_links']['issues'])) {
+$composer['support']['issues'] = $this->project['_links']['issues'];
+}
+if (!isset($composer['abandoned']) && !empty($this->project['archived'])) {
+$composer['abandoned'] = true;
+}
+}
+
+$this->infoCache[$identifier] = $composer;
+}
+
+return $this->infoCache[$identifier];
 }
 
 
@@ -140,7 +176,7 @@ $identifier = $branches[$identifier];
 $resource = $this->getApiUrl().'/repository/files/'.$this->urlEncodeAll($file).'/raw?ref='.$identifier;
 
 try {
-$content = $this->getContents($resource);
+$content = $this->getContents($resource)->getBody();
 } catch (TransportException $e) {
 if ($e->getCode() !== 404) {
 throw $e;
@@ -259,10 +295,7 @@ return $this->tags;
 
 public function getApiUrl()
 {
-$domainName = $this->originUrl;
-$portNumber = (true === is_numeric($this->portNumber)) ? sprintf(':%s', $this->portNumber) : '';
-
-return $this->scheme.'://'.$domainName.$portNumber.'/api/v4/projects/'.$this->urlEncodeAll($this->namespace).'%2F'.$this->urlEncodeAll($this->repository);
+return $this->scheme.'://'.$this->originUrl.'/api/v4/projects/'.$this->urlEncodeAll($this->namespace).'%2F'.$this->urlEncodeAll($this->repository);
 }
 
 
@@ -297,7 +330,8 @@ $resource = $this->getApiUrl().'/repository/'.$type.'?per_page='.$perPage;
 
 $references = array();
 do {
-$data = JsonFile::parseJson($this->getContents($resource), $resource);
+$response = $this->getContents($resource);
+$data = $response->decodeJson();
 
 foreach ($data as $datum) {
 $references[$datum['name']] = $datum['commit']['id'];
@@ -308,7 +342,7 @@ $references[$datum['name']] = $datum['commit']['id'];
 }
 
 if (count($data) >= $perPage) {
-$resource = $this->getNextPage();
+$resource = $this->getNextPage($response);
 } else {
 $resource = false;
 }
@@ -321,7 +355,7 @@ protected function fetchProject()
 {
 
  $resource = $this->getApiUrl();
-$this->project = JsonFile::parseJson($this->getContents($resource, true), $resource);
+$this->project = $this->getContents($resource, true)->decodeJson();
 if (isset($this->project['visibility'])) {
 $this->isPrivate = $this->project['visibility'] !== 'public';
 } else {
@@ -332,19 +366,19 @@ $this->isPrivate = $this->project['visibility'] !== 'public';
 
 protected function attemptCloneFallback()
 {
-try {
 if ($this->isPrivate === false) {
 $url = $this->generatePublicUrl();
 } else {
 $url = $this->generateSshUrl();
 }
 
+try {
 
  
  
  $this->setupGitDriver($url);
 
-return;
+return true;
 } catch (\RuntimeException $e) {
 $this->gitDriver = null;
 
@@ -360,6 +394,10 @@ throw $e;
 
 protected function generateSshUrl()
 {
+if ($this->hasNonstandardOrigin) {
+return 'ssh://git@'.$this->originUrl.'/'.$this->namespace.'/'.$this->repository.'.git';
+}
+
 return 'git@' . $this->originUrl . ':'.$this->namespace.'/'.$this->repository.'.git';
 }
 
@@ -374,8 +412,8 @@ $this->gitDriver = new GitDriver(
 array('url' => $url),
 $this->io,
 $this->config,
-$this->process,
-$this->remoteFilesystem
+$this->httpDownloader,
+$this->process
 );
 $this->gitDriver->initialize();
 }
@@ -386,10 +424,33 @@ $this->gitDriver->initialize();
 protected function getContents($url, $fetchingRepoData = false)
 {
 try {
-$res = parent::getContents($url);
+$response = parent::getContents($url);
 
 if ($fetchingRepoData) {
-$json = JsonFile::parseJson($res, $url);
+$json = $response->decodeJson();
+
+
+ 
+ 
+ if (!isset($json['default_branch']) && isset($json['permissions'])) {
+$this->isPrivate = $json['visibility'] !== 'public';
+
+$moreThanGuestAccess = false;
+
+ 
+ 
+ foreach ($json['permissions'] as $permission) {
+if ($permission && $permission['access_level'] > 10) {
+$moreThanGuestAccess = true;
+}
+}
+
+if (!$moreThanGuestAccess) {
+$this->io->writeError('<warning>GitLab token with Guest only access detected</warning>');
+
+return $this->attemptCloneFallback();
+}
+}
 
 
  if (!isset($json['default_branch'])) {
@@ -401,9 +462,9 @@ throw new TransportException('GitLab API seems to not be authenticated as it did
 }
 }
 
-return $res;
+return $response;
 } catch (TransportException $e) {
-$gitLabUtil = new GitLab($this->io, $this->config, $this->process, $this->remoteFilesystem);
+$gitLabUtil = new GitLab($this->io, $this->config, $this->process, $this->httpDownloader);
 
 switch ($e->getCode()) {
 case 401:
@@ -418,7 +479,9 @@ return parent::getContents($url);
 }
 
 if (!$this->io->isInteractive()) {
-return $this->attemptCloneFallback();
+if ($this->attemptCloneFallback()) {
+return new Response(array('url' => 'dummy'), 200, array(), 'null');
+}
 }
 $this->io->writeError('<warning>Failed to download ' . $this->namespace . '/' . $this->repository . ':' . $e->getMessage() . '</warning>');
 $gitLabUtil->authorizeOAuthInteractively($this->scheme, $this->originUrl, 'Your credentials are required to fetch private repository metadata (<info>'.$this->url.'</info>)');
@@ -431,7 +494,9 @@ return parent::getContents($url);
 }
 
 if (!$this->io->isInteractive() && $fetchingRepoData) {
-return $this->attemptCloneFallback();
+if ($this->attemptCloneFallback()) {
+return new Response(array('url' => 'dummy'), 200, array(), 'null');
+}
 }
 
 throw $e;
@@ -458,7 +523,7 @@ $scheme = !empty($match['scheme']) ? $match['scheme'] : null;
 $guessedDomain = !empty($match['domain']) ? $match['domain'] : $match['domain2'];
 $urlParts = explode('/', $match['parts']);
 
-if (false === self::determineOrigin((array) $config->get('gitlab-domains'), $guessedDomain, $urlParts)) {
+if (false === self::determineOrigin((array) $config->get('gitlab-domains'), $guessedDomain, $urlParts, $match['port'])) {
 return false;
 }
 
@@ -471,20 +536,17 @@ return false;
 return true;
 }
 
-private function getNextPage()
+protected function getNextPage(Response $response)
 {
-$headers = $this->remoteFilesystem->getLastHeaders();
-foreach ($headers as $header) {
-if (preg_match('{^link:\s*(.+?)\s*$}i', $header, $match)) {
-$links = explode(',', $match[1]);
+$header = $response->getHeader('link');
+
+$links = explode(',', $header);
 foreach ($links as $link) {
 if (preg_match('{<(.+?)>; *rel="next"}', $link, $match)) {
 return $match[1];
 }
 }
 }
-}
-}
 
 
 
@@ -492,16 +554,25 @@ return $match[1];
 
 
 
-private static function determineOrigin(array $configuredDomains, $guessedDomain, array &$urlParts)
+private static function determineOrigin(array $configuredDomains, $guessedDomain, array &$urlParts, $portNumber)
 {
-if (in_array($guessedDomain, $configuredDomains)) {
+$guessedDomain = strtolower($guessedDomain);
+
+if (in_array($guessedDomain, $configuredDomains) || ($portNumber && in_array($guessedDomain.':'.$portNumber, $configuredDomains))) {
+if ($portNumber) {
+return $guessedDomain.':'.$portNumber;
+}
 return $guessedDomain;
+}
+
+if ($portNumber) {
+$guessedDomain .= ':'.$portNumber;
 }
 
 while (null !== ($part = array_shift($urlParts))) {
 $guessedDomain .= '/' . $part;
 
-if (in_array($guessedDomain, $configuredDomains)) {
+if (in_array($guessedDomain, $configuredDomains) || ($portNumber && in_array(preg_replace('{:\d+}', '', $guessedDomain), $configuredDomains))) {
 return $guessedDomain;
 }
 }

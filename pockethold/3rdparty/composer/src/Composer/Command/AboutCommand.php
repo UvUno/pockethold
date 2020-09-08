@@ -37,10 +37,12 @@ protected function execute(InputInterface $input, OutputInterface $output)
 {
 $this->getIO()->write(
 <<<EOT
-<info>Composer - Package Management for PHP</info>
+<info>Composer - Dependency Manager for PHP</info>
 <comment>Composer is a dependency manager tracking local dependencies of your projects and libraries.
 See https://getcomposer.org/ for more information.</comment>
 EOT
 );
+
+return 0;
 }
 }

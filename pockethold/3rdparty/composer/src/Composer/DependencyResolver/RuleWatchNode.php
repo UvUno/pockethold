@@ -37,7 +37,7 @@ $this->rule = $rule;
 
 $literals = $rule->getLiterals();
 
-$literalCount = count($literals);
+$literalCount = \count($literals);
 $this->watch1 = $literalCount > 0 ? $literals[0] : 0;
 $this->watch2 = $literalCount > 1 ? $literals[1] : 0;
 }
@@ -55,7 +55,7 @@ public function watch2OnHighest(Decisions $decisions)
 $literals = $this->rule->getLiterals();
 
 
- if (count($literals) < 3) {
+ if (\count($literals) < 3 || $this->rule instanceof MultiConflictRule) {
 return;
 }
 

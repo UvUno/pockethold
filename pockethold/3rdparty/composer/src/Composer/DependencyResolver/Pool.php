@@ -12,17 +12,11 @@
 
 namespace Composer\DependencyResolver;
 
-use Composer\Package\BasePackage;
 use Composer\Package\AliasPackage;
 use Composer\Package\Version\VersionParser;
+use Composer\Semver\CompilingMatcher;
 use Composer\Semver\Constraint\ConstraintInterface;
 use Composer\Semver\Constraint\Constraint;
-use Composer\Semver\Constraint\EmptyConstraint;
-use Composer\Repository\RepositoryInterface;
-use Composer\Repository\CompositeRepository;
-use Composer\Repository\ComposerRepository;
-use Composer\Repository\InstalledRepositoryInterface;
-use Composer\Repository\PlatformRepository;
 use Composer\Package\PackageInterface;
 
 
@@ -33,120 +27,32 @@ use Composer\Package\PackageInterface;
 
 class Pool implements \Countable
 {
-const MATCH_NAME = -1;
-const MATCH_NONE = 0;
-const MATCH = 1;
-const MATCH_PROVIDE = 2;
-const MATCH_REPLACE = 3;
-const MATCH_FILTERED = 4;
-
-protected $repositories = array();
-protected $providerRepos = array();
 protected $packages = array();
 protected $packageByName = array();
-protected $packageByExactName = array();
-protected $acceptableStabilities;
-protected $stabilityFlags;
 protected $versionParser;
 protected $providerCache = array();
-protected $filterRequires;
-protected $whitelist = null;
-protected $id = 1;
+protected $unacceptableFixedPackages;
 
-public function __construct($minimumStability = 'stable', array $stabilityFlags = array(), array $filterRequires = array())
+public function __construct(array $packages = array(), array $unacceptableFixedPackages = array())
 {
 $this->versionParser = new VersionParser;
-$this->acceptableStabilities = array();
-foreach (BasePackage::$stabilities as $stability => $value) {
-if ($value <= BasePackage::$stabilities[$minimumStability]) {
-$this->acceptableStabilities[$stability] = $value;
-}
-}
-$this->stabilityFlags = $stabilityFlags;
-$this->filterRequires = $filterRequires;
-foreach ($filterRequires as $name => $constraint) {
-if (preg_match(PlatformRepository::PLATFORM_PACKAGE_REGEX, $name)) {
-unset($this->filterRequires[$name]);
-}
-}
+$this->setPackages($packages);
+$this->unacceptableFixedPackages = $unacceptableFixedPackages;
 }
 
-public function setWhitelist($whitelist)
+private function setPackages(array $packages)
 {
-$this->whitelist = $whitelist;
-$this->providerCache = array();
-}
+$id = 1;
 
-
-
-
-
-
-
-public function addRepository(RepositoryInterface $repo, $rootAliases = array())
-{
-if ($repo instanceof CompositeRepository) {
-$repos = $repo->getRepositories();
-} else {
-$repos = array($repo);
-}
-
-foreach ($repos as $repo) {
-$this->repositories[] = $repo;
-
-$exempt = $repo instanceof PlatformRepository || $repo instanceof InstalledRepositoryInterface;
-
-if ($repo instanceof ComposerRepository && $repo->hasProviders()) {
-$this->providerRepos[] = $repo;
-$repo->setRootAliases($rootAliases);
-$repo->resetPackageIds();
-} else {
-foreach ($repo->getPackages() as $package) {
-$names = $package->getNames();
-$stability = $package->getStability();
-if ($exempt || $this->isPackageAcceptable($names, $stability)) {
-$package->setId($this->id++);
+foreach ($packages as $package) {
 $this->packages[] = $package;
-$this->packageByExactName[$package->getName()][$package->id] = $package;
 
-foreach ($names as $provided) {
+$package->id = $id++;
+
+foreach ($package->getNames() as $provided) {
 $this->packageByName[$provided][] = $package;
 }
-
-
- $name = $package->getName();
-if (isset($rootAliases[$name][$package->getVersion()])) {
-$alias = $rootAliases[$name][$package->getVersion()];
-if ($package instanceof AliasPackage) {
-$package = $package->getAliasOf();
 }
-$aliasPackage = new AliasPackage($package, $alias['alias_normalized'], $alias['alias']);
-$aliasPackage->setRootPackageAlias(true);
-$aliasPackage->setId($this->id++);
-
-$package->getRepository()->addPackage($aliasPackage);
-$this->packages[] = $aliasPackage;
-$this->packageByExactName[$aliasPackage->getName()][$aliasPackage->id] = $aliasPackage;
-
-foreach ($aliasPackage->getNames() as $name) {
-$this->packageByName[$name][] = $aliasPackage;
-}
-}
-}
-}
-}
-}
-}
-
-public function getPriority(RepositoryInterface $repo)
-{
-$priority = array_search($repo, $this->repositories, true);
-
-if (false === $priority) {
-throw new \RuntimeException("Could not determine repository priority. The repository was not registered in the pool.");
-}
-
-return -$priority;
 }
 
 
@@ -165,7 +71,7 @@ return $this->packages[$id - 1];
 
 public function count()
 {
-return count($this->packages);
+return \count($this->packages);
 }
 
 
@@ -176,104 +82,34 @@ return count($this->packages);
 
 
 
-
-
-
-public function whatProvides($name, ConstraintInterface $constraint = null, $mustMatchName = false, $bypassFilters = false)
+public function whatProvides($name, ConstraintInterface $constraint = null)
 {
-if ($bypassFilters) {
-return $this->computeWhatProvides($name, $constraint, $mustMatchName, true);
-}
-
-$key = ((int) $mustMatchName).$constraint;
+$key = (string) $constraint;
 if (isset($this->providerCache[$name][$key])) {
 return $this->providerCache[$name][$key];
 }
 
-return $this->providerCache[$name][$key] = $this->computeWhatProvides($name, $constraint, $mustMatchName, $bypassFilters);
+return $this->providerCache[$name][$key] = $this->computeWhatProvides($name, $constraint);
 }
 
 
 
 
-private function computeWhatProvides($name, $constraint, $mustMatchName = false, $bypassFilters = false)
+private function computeWhatProvides($name, $constraint)
 {
-$candidates = array();
-
-foreach ($this->providerRepos as $repo) {
-foreach ($repo->whatProvides($this, $name, $bypassFilters) as $candidate) {
-$candidates[] = $candidate;
-if ($candidate->id < 1) {
-$candidate->setId($this->id++);
-$this->packages[$this->id - 2] = $candidate;
-}
-}
+if (!isset($this->packageByName[$name])) {
+return array();
 }
 
-if ($mustMatchName) {
-$candidates = array_filter($candidates, function ($candidate) use ($name) {
-return $candidate->getName() == $name;
-});
-if (isset($this->packageByExactName[$name])) {
-$candidates = array_merge($candidates, $this->packageByExactName[$name]);
-}
-} elseif (isset($this->packageByName[$name])) {
-$candidates = array_merge($candidates, $this->packageByName[$name]);
-}
+$matches = array();
 
-$matches = $provideMatches = array();
-$nameMatch = false;
-
-foreach ($candidates as $candidate) {
-$aliasOfCandidate = null;
-
-
- 
- if ($candidate instanceof AliasPackage) {
-$aliasOfCandidate = $candidate->getAliasOf();
-}
-
-if ($this->whitelist !== null && !$bypassFilters && (
-(!($candidate instanceof AliasPackage) && !isset($this->whitelist[$candidate->id])) ||
-($candidate instanceof AliasPackage && !isset($this->whitelist[$aliasOfCandidate->id]))
-)) {
-continue;
-}
-switch ($this->match($candidate, $name, $constraint, $bypassFilters)) {
-case self::MATCH_NONE:
-break;
-
-case self::MATCH_NAME:
-$nameMatch = true;
-break;
-
-case self::MATCH:
-$nameMatch = true;
+foreach ($this->packageByName[$name] as $candidate) {
+if ($this->match($candidate, $name, $constraint)) {
 $matches[] = $candidate;
-break;
-
-case self::MATCH_PROVIDE:
-$provideMatches[] = $candidate;
-break;
-
-case self::MATCH_REPLACE:
-$matches[] = $candidate;
-break;
-
-case self::MATCH_FILTERED:
-break;
-
-default:
-throw new \UnexpectedValueException('Unexpected match type');
 }
 }
 
-
- if ($nameMatch) {
 return $matches;
-}
-
-return array_merge($matches, $provideMatches);
 }
 
 public function literalToPackage($literal)
@@ -296,22 +132,6 @@ $prefix = ($literal > 0 ? 'install' : 'don\'t install');
 return $prefix.' '.$package->getPrettyString();
 }
 
-public function isPackageAcceptable($name, $stability)
-{
-foreach ((array) $name as $n) {
-
- if (!isset($this->stabilityFlags[$n]) && isset($this->acceptableStabilities[$stability])) {
-return true;
-}
-
-
- if (isset($this->stabilityFlags[$n]) && BasePackage::$stabilities[$stability] <= $this->stabilityFlags[$n]) {
-return true;
-}
-}
-
-return false;
-}
 
 
 
@@ -321,28 +141,17 @@ return false;
 
 
 
-
-private function match($candidate, $name, ConstraintInterface $constraint = null, $bypassFilters)
+public function match($candidate, $name, ConstraintInterface $constraint = null)
 {
 $candidateName = $candidate->getName();
 $candidateVersion = $candidate->getVersion();
-$isDev = $candidate->getStability() === 'dev';
-$isAlias = $candidate instanceof AliasPackage;
-
-if (!$bypassFilters && !$isDev && !$isAlias && isset($this->filterRequires[$name])) {
-$requireFilter = $this->filterRequires[$name];
-} else {
-$requireFilter = new EmptyConstraint;
-}
 
 if ($candidateName === $name) {
-$pkgConstraint = new Constraint('==', $candidateVersion);
-
-if ($constraint === null || $constraint->matches($pkgConstraint)) {
-return $requireFilter->matches($pkgConstraint) ? self::MATCH : self::MATCH_FILTERED;
+if ($constraint === null || CompilingMatcher::match($constraint, Constraint::OP_EQ, $candidateVersion)) {
+return true;
 }
 
-return self::MATCH_NAME;
+return false;
 }
 
 $provides = $candidate->getProvides();
@@ -352,27 +161,43 @@ $replaces = $candidate->getReplaces();
  if (isset($replaces[0]) || isset($provides[0])) {
 foreach ($provides as $link) {
 if ($link->getTarget() === $name && ($constraint === null || $constraint->matches($link->getConstraint()))) {
-return $requireFilter->matches($link->getConstraint()) ? self::MATCH_PROVIDE : self::MATCH_FILTERED;
+return true;
 }
 }
 
 foreach ($replaces as $link) {
 if ($link->getTarget() === $name && ($constraint === null || $constraint->matches($link->getConstraint()))) {
-return $requireFilter->matches($link->getConstraint()) ? self::MATCH_REPLACE : self::MATCH_FILTERED;
+return true;
 }
 }
 
-return self::MATCH_NONE;
+return false;
 }
 
 if (isset($provides[$name]) && ($constraint === null || $constraint->matches($provides[$name]->getConstraint()))) {
-return $requireFilter->matches($provides[$name]->getConstraint()) ? self::MATCH_PROVIDE : self::MATCH_FILTERED;
+return true;
 }
 
 if (isset($replaces[$name]) && ($constraint === null || $constraint->matches($replaces[$name]->getConstraint()))) {
-return $requireFilter->matches($replaces[$name]->getConstraint()) ? self::MATCH_REPLACE : self::MATCH_FILTERED;
+return true;
 }
 
-return self::MATCH_NONE;
+return false;
+}
+
+public function isUnacceptableFixedPackage(PackageInterface $package)
+{
+return \in_array($package, $this->unacceptableFixedPackages, true);
+}
+
+public function __toString()
+{
+$str = "Pool:\n";
+
+foreach ($this->packages as $package) {
+$str .= '- '.str_pad($package->id, 6, ' ', STR_PAD_LEFT).': '.$package->getName()."\n";
+}
+
+return $str;
 }
 }

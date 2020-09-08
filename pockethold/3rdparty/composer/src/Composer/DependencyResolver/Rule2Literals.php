@@ -29,10 +29,9 @@ protected $literal2;
 
 
 
-
-public function __construct($literal1, $literal2, $reason, $reasonData, $job = null)
+public function __construct($literal1, $literal2, $reason, $reasonData)
 {
-parent::__construct($reason, $reasonData, $job);
+parent::__construct($reason, $reasonData);
 
 if ($literal1 < $literal2) {
 $this->literal1 = $literal1;
@@ -77,7 +76,7 @@ return true;
 }
 
 $literals = $rule->getLiterals();
-if (2 != count($literals)) {
+if (2 != \count($literals)) {
 return false;
 }
 

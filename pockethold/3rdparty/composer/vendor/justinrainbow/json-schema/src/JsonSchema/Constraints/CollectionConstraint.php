@@ -65,32 +65,7 @@ protected function validateItems(&$value, $schema = null, JsonPointer $path = nu
 {
 if (is_object($schema->items)) {
 
-
-if (isset($schema->items->type)
-&& (
-$schema->items->type == 'string'
-|| $schema->items->type == 'number'
-|| $schema->items->type == 'integer'
-)
-&& !isset($schema->additionalItems)
-) {
-
- $type = $schema->items->type;
-$typeValidator = $this->factory->createInstanceFor('type');
-$validator = $this->factory->createInstanceFor($type === 'integer' ? 'number' : $type);
-
-foreach ($value as $k => &$v) {
-$k_path = $this->incrementPath($path, $k);
-$typeValidator->check($v, $schema->items, $k_path, $i);
-
-$validator->check($v, $schema->items, $k_path, $i);
-}
-unset($v); 
-
-$this->addErrors($typeValidator->getErrors());
-$this->addErrors($validator->getErrors());
-} else {
-foreach ($value as $k => &$v) {
+ foreach ($value as $k => &$v) {
 $initErrors = $this->getErrors();
 
 
@@ -111,7 +86,6 @@ $this->errors = $initErrors;
 }
 unset($v); 
 
-}
 } else {
 
  foreach ($value as $k => &$v) {

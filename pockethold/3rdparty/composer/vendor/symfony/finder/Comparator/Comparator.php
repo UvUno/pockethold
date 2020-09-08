@@ -64,7 +64,7 @@ if (!$operator) {
 $operator = '==';
 }
 
-if (!in_array($operator, array('>', '<', '>=', '<=', '==', '!='))) {
+if (!\in_array($operator, array('>', '<', '>=', '<=', '==', '!='))) {
 throw new \InvalidArgumentException(sprintf('Invalid operator "%s".', $operator));
 }
 

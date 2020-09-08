@@ -11,38 +11,38 @@
 
 namespace Symfony\Component\Console;
 
-use Symfony\Component\Console\Descriptor\TextDescriptor;
-use Symfony\Component\Console\Descriptor\XmlDescriptor;
-use Symfony\Component\Console\Exception\ExceptionInterface;
-use Symfony\Component\Console\Formatter\OutputFormatter;
-use Symfony\Component\Console\Helper\DebugFormatterHelper;
-use Symfony\Component\Console\Helper\Helper;
-use Symfony\Component\Console\Helper\ProcessHelper;
-use Symfony\Component\Console\Helper\QuestionHelper;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\ArgvInput;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Input\InputDefinition;
-use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Input\InputArgument;
-use Symfony\Component\Console\Input\InputAwareInterface;
-use Symfony\Component\Console\Output\BufferedOutput;
-use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Output\ConsoleOutput;
-use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Command\HelpCommand;
 use Symfony\Component\Console\Command\ListCommand;
-use Symfony\Component\Console\Helper\HelperSet;
-use Symfony\Component\Console\Helper\FormatterHelper;
-use Symfony\Component\Console\Helper\DialogHelper;
-use Symfony\Component\Console\Helper\ProgressHelper;
-use Symfony\Component\Console\Helper\TableHelper;
+use Symfony\Component\Console\Descriptor\TextDescriptor;
+use Symfony\Component\Console\Descriptor\XmlDescriptor;
 use Symfony\Component\Console\Event\ConsoleCommandEvent;
 use Symfony\Component\Console\Event\ConsoleExceptionEvent;
 use Symfony\Component\Console\Event\ConsoleTerminateEvent;
 use Symfony\Component\Console\Exception\CommandNotFoundException;
+use Symfony\Component\Console\Exception\ExceptionInterface;
 use Symfony\Component\Console\Exception\LogicException;
+use Symfony\Component\Console\Formatter\OutputFormatter;
+use Symfony\Component\Console\Helper\DebugFormatterHelper;
+use Symfony\Component\Console\Helper\DialogHelper;
+use Symfony\Component\Console\Helper\FormatterHelper;
+use Symfony\Component\Console\Helper\Helper;
+use Symfony\Component\Console\Helper\HelperSet;
+use Symfony\Component\Console\Helper\ProcessHelper;
+use Symfony\Component\Console\Helper\ProgressHelper;
+use Symfony\Component\Console\Helper\QuestionHelper;
+use Symfony\Component\Console\Helper\TableHelper;
+use Symfony\Component\Console\Input\ArgvInput;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputAwareInterface;
+use Symfony\Component\Console\Input\InputDefinition;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Output\ConsoleOutput;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Debug\Exception\FatalThrowableError;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
@@ -129,15 +129,7 @@ $this->renderException($e, $output->getErrorOutput());
 $this->renderException($e, $output);
 }
 
-$exitCode = $e->getCode();
-if (is_numeric($exitCode)) {
-$exitCode = (int) $exitCode;
-if (0 === $exitCode) {
-$exitCode = 1;
-}
-} else {
-$exitCode = 1;
-}
+$exitCode = $this->getExitCodeForThrowable($e);
 }
 
 if ($this->autoExit) {
@@ -369,7 +361,7 @@ return;
 }
 
 if (null === $command->getDefinition()) {
-throw new LogicException(sprintf('Command class "%s" is not correctly initialized. You probably forgot to call the parent constructor.', get_class($command)));
+throw new LogicException(sprintf('Command class "%s" is not correctly initialized. You probably forgot to call the parent constructor.', \get_class($command)));
 }
 
 $this->commands[$command->getName()] = $command;
@@ -466,7 +458,7 @@ if (empty($namespaces)) {
 $message = sprintf('There are no commands defined in the "%s" namespace.', $namespace);
 
 if ($alternatives = $this->findAlternatives($namespace, $allNamespaces)) {
-if (1 == count($alternatives)) {
+if (1 == \count($alternatives)) {
 $message .= "\n\nDid you mean this?\n    ";
 } else {
 $message .= "\n\nDid you mean one of these?\n    ";
@@ -478,8 +470,8 @@ $message .= implode("\n    ", $alternatives);
 throw new CommandNotFoundException($message, $alternatives);
 }
 
-$exact = in_array($namespace, $namespaces, true);
-if (count($namespaces) > 1 && !$exact) {
+$exact = \in_array($namespace, $namespaces, true);
+if (\count($namespaces) > 1 && !$exact) {
 throw new CommandNotFoundException(sprintf('The namespace "%s" is ambiguous (%s).', $namespace, $this->getAbbreviationSuggestions(array_values($namespaces))), array_values($namespaces));
 }
 
@@ -506,7 +498,7 @@ $allCommands = array_keys($this->commands);
 $expr = preg_replace_callback('{([^:]+|)}', function ($matches) { return preg_quote($matches[1]).'[^:]*'; }, $name);
 $commands = preg_grep('{^'.$expr.'}', $allCommands);
 
-if (empty($commands) || count(preg_grep('{^'.$expr.'$}', $commands)) < 1) {
+if (empty($commands) || \count(preg_grep('{^'.$expr.'$}', $commands)) < 1) {
 if (false !== $pos = strrpos($name, ':')) {
 
  $this->findNamespace(substr($name, 0, $pos));
@@ -515,7 +507,7 @@ if (false !== $pos = strrpos($name, ':')) {
 $message = sprintf('Command "%s" is not defined.', $name);
 
 if ($alternatives = $this->findAlternatives($name, $allCommands)) {
-if (1 == count($alternatives)) {
+if (1 == \count($alternatives)) {
 $message .= "\n\nDid you mean this?\n    ";
 } else {
 $message .= "\n\nDid you mean one of these?\n    ";
@@ -527,18 +519,18 @@ throw new CommandNotFoundException($message, $alternatives);
 }
 
 
- if (count($commands) > 1) {
+ if (\count($commands) > 1) {
 $commandList = $this->commands;
 $commands = array_filter($commands, function ($nameOrAlias) use ($commandList, $commands, &$aliases) {
 $commandName = $commandList[$nameOrAlias]->getName();
 $aliases[$nameOrAlias] = $commandName;
 
-return $commandName === $nameOrAlias || !in_array($commandName, $commands);
+return $commandName === $nameOrAlias || !\in_array($commandName, $commands);
 });
 }
 
-$exact = in_array($name, $commands, true) || isset($aliases[$name]);
-if (!$exact && count($commands) > 1) {
+$exact = \in_array($name, $commands, true) || isset($aliases[$name]);
+if (!$exact && \count($commands) > 1) {
 $suggestions = $this->getAbbreviationSuggestions(array_values($commands));
 
 throw new CommandNotFoundException(sprintf('Command "%s" is ambiguous (%s).', $name, $suggestions), array_values($commands));
@@ -585,7 +577,7 @@ public static function getAbbreviations($names)
 {
 $abbrevs = array();
 foreach ($names as $name) {
-for ($len = strlen($name); $len > 0; --$len) {
+for ($len = \strlen($name); $len > 0; --$len) {
 $abbrev = substr($name, 0, $len);
 $abbrevs[$abbrev][] = $name;
 }
@@ -649,13 +641,13 @@ public function renderException($e, $output)
 $output->writeln('', OutputInterface::VERBOSITY_QUIET);
 
 do {
-$title = sprintf('  [%s]  ', get_class($e));
+$title = sprintf('  [%s]  ', \get_class($e));
 
 $len = Helper::strlen($title);
 
 $width = $this->getTerminalWidth() ? $this->getTerminalWidth() - 1 : PHP_INT_MAX;
 
- if (defined('HHVM_VERSION') && $width > 1 << 31) {
+ if (\defined('HHVM_VERSION') && $width > 1 << 31) {
 $width = 1 << 31;
 }
 $lines = array();
@@ -692,7 +684,7 @@ array_unshift($trace, array(
 'args' => array(),
 ));
 
-for ($i = 0, $count = count($trace); $i < $count; ++$i) {
+for ($i = 0, $count = \count($trace); $i < $count; ++$i) {
 $class = isset($trace[$i]['class']) ? $trace[$i]['class'] : '';
 $type = isset($trace[$i]['type']) ? $trace[$i]['type'] : '';
 $function = $trace[$i]['function'];
@@ -747,7 +739,7 @@ if ($this->terminalDimensions) {
 return $this->terminalDimensions;
 }
 
-if ('\\' === DIRECTORY_SEPARATOR) {
+if ('\\' === \DIRECTORY_SEPARATOR) {
 
  if (preg_match('/^(\d+)x\d+ \(\d+x(\d+)\)$/', trim(getenv('ANSICON')), $matches)) {
 return array((int) $matches[1], (int) $matches[2]);
@@ -802,7 +794,7 @@ $output->setDecorated(false);
 
 if (true === $input->hasParameterOption(array('--no-interaction', '-n'))) {
 $input->setInteractive(false);
-} elseif (function_exists('posix_isatty') && $this->getHelperSet()->has('question')) {
+} elseif (\function_exists('posix_isatty') && $this->getHelperSet()->has('question')) {
 $inputStream = $this->getHelperSet()->get('question')->getInputStream();
 if (!@posix_isatty($inputStream) && false === getenv('SHELL_INTERACTIVE')) {
 $input->setInteractive(false);
@@ -873,7 +865,8 @@ $this->dispatcher->dispatch(ConsoleEvents::EXCEPTION, $event);
 if ($x !== $event->getException()) {
 $e = $event->getException();
 }
-$exitCode = $e->getCode();
+
+$exitCode = $this->getExitCodeForThrowable($e);
 }
 
 $event = new ConsoleTerminateEvent($command, $input, $output, $exitCode);
@@ -951,13 +944,13 @@ new QuestionHelper(),
 
 private function getSttyColumns()
 {
-if (!function_exists('proc_open')) {
+if (!\function_exists('proc_open')) {
 return;
 }
 
 $descriptorspec = array(1 => array('pipe', 'w'), 2 => array('pipe', 'w'));
 $process = proc_open('stty -a | grep columns', $descriptorspec, $pipes, null, null, array('suppress_errors' => true));
-if (is_resource($process)) {
+if (\is_resource($process)) {
 $info = stream_get_contents($pipes[1]);
 fclose($pipes[1]);
 fclose($pipes[2]);
@@ -974,13 +967,13 @@ return $info;
 
 private function getConsoleMode()
 {
-if (!function_exists('proc_open')) {
+if (!\function_exists('proc_open')) {
 return;
 }
 
 $descriptorspec = array(1 => array('pipe', 'w'), 2 => array('pipe', 'w'));
 $process = proc_open('mode CON', $descriptorspec, $pipes, null, null, array('suppress_errors' => true));
-if (is_resource($process)) {
+if (\is_resource($process)) {
 $info = stream_get_contents($pipes[1]);
 fclose($pipes[1]);
 fclose($pipes[2]);
@@ -1001,7 +994,7 @@ return $matches[2].'x'.$matches[1];
 
 private function getAbbreviationSuggestions($abbrevs)
 {
-return sprintf('%s, %s%s', $abbrevs[0], $abbrevs[1], count($abbrevs) > 2 ? sprintf(' and %d more', count($abbrevs) - 2) : '');
+return sprintf('%s, %s%s', $abbrevs[0], $abbrevs[1], \count($abbrevs) > 2 ? sprintf(' and %d more', \count($abbrevs) - 2) : '');
 }
 
 
@@ -1019,7 +1012,7 @@ public function extractNamespace($name, $limit = null)
 $parts = explode(':', $name);
 array_pop($parts);
 
-return implode(':', null === $limit ? $parts : array_slice($parts, 0, $limit));
+return implode(':', null === $limit ? $parts : \array_slice($parts, 0, $limit));
 }
 
 
@@ -1052,7 +1045,7 @@ continue;
 }
 
 $lev = levenshtein($subname, $parts[$i]);
-if ($lev <= strlen($subname) / 3 || '' !== $subname && false !== strpos($parts[$i], $subname)) {
+if ($lev <= \strlen($subname) / 3 || '' !== $subname && false !== strpos($parts[$i], $subname)) {
 $alternatives[$collectionName] = $exists ? $alternatives[$collectionName] + $lev : $lev;
 } elseif ($exists) {
 $alternatives[$collectionName] += $threshold;
@@ -1062,7 +1055,7 @@ $alternatives[$collectionName] += $threshold;
 
 foreach ($collection as $item) {
 $lev = levenshtein($name, $item);
-if ($lev <= strlen($name) / 3 || false !== strpos($item, $name)) {
+if ($lev <= \strlen($name) / 3 || false !== strpos($item, $name)) {
 $alternatives[$item] = isset($alternatives[$item]) ? $alternatives[$item] - $lev : $lev;
 }
 }
@@ -1106,7 +1099,7 @@ continue;
 $line = $char;
 }
 
-$lines[] = count($lines) ? str_pad($line, $width) : $line;
+$lines[] = \count($lines) ? str_pad($line, $width) : $line;
 
 mb_convert_variables($encoding, 'utf8', $lines);
 
@@ -1127,7 +1120,7 @@ private function extractAllNamespaces($name)
 $namespaces = array();
 
 foreach ($parts as $part) {
-if (count($namespaces)) {
+if (\count($namespaces)) {
 $namespaces[] = end($namespaces).':'.$part;
 } else {
 $namespaces[] = $part;
@@ -1147,5 +1140,25 @@ $this->initialized = true;
 foreach ($this->getDefaultCommands() as $command) {
 $this->add($command);
 }
+}
+
+
+
+
+
+
+private function getExitCodeForThrowable($throwable)
+{
+$exitCode = $throwable->getCode();
+if (is_numeric($exitCode)) {
+$exitCode = (int) $exitCode;
+if (0 === $exitCode) {
+$exitCode = 1;
+}
+} else {
+$exitCode = 1;
+}
+
+return $exitCode;
 }
 }

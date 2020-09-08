@@ -48,7 +48,7 @@ Process::setEnv(self::ENV_RESTART);
 $this->time = $start ? round((microtime(true) - $start) * 1000) : 0;
 
 $this->envAllowXdebug = $envAllowXdebug;
-$this->debug = $debug;
+$this->debug = $debug && defined('STDERR');
 }
 
 
@@ -85,7 +85,7 @@ $this->logger->log($level ?: LogLevel::DEBUG, $text);
 }
 
 if ($this->debug) {
-printf('xdebug-handler[%d] %s%s', getmypid(), $text, PHP_EOL);
+fwrite(STDERR, sprintf('xdebug-handler[%d] %s', getmypid(), $text.PHP_EOL));
 }
 }
 
@@ -158,6 +158,6 @@ return $this->envAllowXdebug.'='.getenv($this->envAllowXdebug);
 private function getLoadedMessage()
 {
 $loaded = $this->loaded ? sprintf('loaded (%s)', $this->loaded) : 'not loaded';
-return 'The xdebug extension is '.$loaded;
+return 'The Xdebug extension is '.$loaded;
 }
 }

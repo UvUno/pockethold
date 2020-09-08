@@ -123,6 +123,6 @@ return $this->source.' '.$this->description.' '.$this->target.' ('.$this->constr
 
 public function getPrettyString(PackageInterface $sourcePackage)
 {
-return $sourcePackage->getPrettyString().' '.$this->description.' '.$this->target.' '.$this->constraint->getPrettyString().'';
+return $sourcePackage->getPrettyString().' '.$this->description.' '.$this->target.($this->constraint ? ' '.$this->constraint->getPrettyString() : '');
 }
 }

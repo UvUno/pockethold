@@ -56,11 +56,11 @@ public function hasParameterOption($values)
 $values = (array) $values;
 
 foreach ($this->parameters as $k => $v) {
-if (!is_int($k)) {
+if (!\is_int($k)) {
 $v = $k;
 }
 
-if (in_array($v, $values)) {
+if (\in_array($v, $values)) {
 return true;
 }
 }
@@ -76,11 +76,11 @@ public function getParameterOption($values, $default = false)
 $values = (array) $values;
 
 foreach ($this->parameters as $k => $v) {
-if (is_int($k)) {
-if (in_array($v, $values)) {
+if (\is_int($k)) {
+if (\in_array($v, $values)) {
 return true;
 }
-} elseif (in_array($k, $values)) {
+} elseif (\in_array($k, $values)) {
 return $v;
 }
 }
@@ -98,7 +98,7 @@ public function __toString()
 $params = array();
 foreach ($this->parameters as $param => $val) {
 if ($param && '-' === $param[0]) {
-if (is_array($val)) {
+if (\is_array($val)) {
 foreach ($val as $v) {
 $params[] = $param.('' != $v ? '='.$this->escapeToken($v) : '');
 }
@@ -106,7 +106,7 @@ $params[] = $param.('' != $v ? '='.$this->escapeToken($v) : '');
 $params[] = $param.('' != $val ? '='.$this->escapeToken($val) : '');
 }
 } else {
-$params[] = is_array($val) ? implode(' ', array_map(array($this, 'escapeToken'), $val)) : $this->escapeToken($val);
+$params[] = \is_array($val) ? implode(' ', array_map(array($this, 'escapeToken'), $val)) : $this->escapeToken($val);
 }
 }
 

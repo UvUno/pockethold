@@ -19,8 +19,6 @@ use Composer\CaBundle\CaBundle;
 
 final class TlsHelper
 {
-private static $useOpensslParse;
-
 
 
 

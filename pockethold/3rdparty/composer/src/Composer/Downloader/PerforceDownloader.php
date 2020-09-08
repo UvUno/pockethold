@@ -27,7 +27,15 @@ protected $perforce;
 
 
 
-public function doDownload(PackageInterface $package, $path, $url)
+protected function doDownload(PackageInterface $package, $path, $url, PackageInterface $prevPackage = null)
+{
+
+}
+
+
+
+
+public function doInstall(PackageInterface $package, $path, $url)
 {
 $ref = $package->getSourceReference();
 $label = $this->getLabelFromSourceReference($ref);
@@ -76,9 +84,9 @@ return $repository->getRepoConfig();
 
 
 
-public function doUpdate(PackageInterface $initial, PackageInterface $target, $path, $url)
+protected function doUpdate(PackageInterface $initial, PackageInterface $target, $path, $url)
 {
-$this->doDownload($target, $path, $url);
+$this->doInstall($target, $path, $url);
 }
 
 
@@ -87,8 +95,6 @@ $this->doDownload($target, $path, $url);
 public function getLocalChanges(PackageInterface $package, $path)
 {
 $this->io->writeError('Perforce driver does not check for local changes before overriding', true);
-
-return;
 }
 
 

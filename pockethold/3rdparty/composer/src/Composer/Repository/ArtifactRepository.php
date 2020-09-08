@@ -16,6 +16,7 @@ use Composer\IO\IOInterface;
 use Composer\Json\JsonFile;
 use Composer\Package\Loader\ArrayLoader;
 use Composer\Package\Loader\LoaderInterface;
+use Composer\Util\Zip;
 
 
 
@@ -40,6 +41,11 @@ $this->loader = new ArrayLoader();
 $this->lookup = $repoConfig['url'];
 $this->io = $io;
 $this->repoConfig = $repoConfig;
+}
+
+public function getRepoName()
+{
+return 'artifact repo ('.$this->lookup.')';
 }
 
 public function getRepoConfig()
@@ -80,74 +86,20 @@ $this->addPackage($package);
 }
 }
 
-
-
-
-
-
-
-
-private function locateFile(\ZipArchive $zip, $filename)
-{
-$indexOfShortestMatch = false;
-$lengthOfShortestMatch = -1;
-
-for ($i = 0; $i < $zip->numFiles; $i++) {
-$stat = $zip->statIndex($i);
-if (strcmp(basename($stat['name']), $filename) === 0) {
-$directoryName = dirname($stat['name']);
-if ($directoryName == '.') {
-
- 
- return $i;
-}
-
-if (strpos($directoryName, '\\') !== false ||
-strpos($directoryName, '/') !== false) {
-
- continue;
-}
-
-$length = strlen($stat['name']);
-if ($indexOfShortestMatch === false || $length < $lengthOfShortestMatch) {
-
- $contents = $zip->getFromIndex($i);
-if ($contents !== false) {
-$indexOfShortestMatch = $i;
-$lengthOfShortestMatch = $length;
-}
-}
-}
-}
-
-return $indexOfShortestMatch;
-}
-
 private function getComposerInformation(\SplFileInfo $file)
 {
-$zip = new \ZipArchive();
-$zip->open($file->getPathname());
+$json = null;
+try {
+$json = Zip::getComposerJson($file->getPathname());
+} catch (\Exception $exception) {
+$this->io->write('Failed loading package '.$file->getPathname().': '.$exception->getMessage(), false, IOInterface::VERBOSE);
+}
 
-if (0 == $zip->numFiles) {
-$zip->close();
-
+if (null === $json) {
 return false;
 }
 
-$foundFileIndex = $this->locateFile($zip, 'composer.json');
-if (false === $foundFileIndex) {
-$zip->close();
-
-return false;
-}
-
-$configurationFileName = $zip->getNameIndex($foundFileIndex);
-$zip->close();
-
-$composerFile = "zip://{$file->getPathname()}#$configurationFileName";
-$json = file_get_contents($composerFile);
-
-$package = JsonFile::parseJson($json, $composerFile);
+$package = JsonFile::parseJson($json, $file->getPathname().'#composer.json');
 $package['dist'] = array(
 'type' => 'zip',
 'url' => strtr($file->getPathname(), '\\', '/'),

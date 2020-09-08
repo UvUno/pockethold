@@ -24,8 +24,8 @@ interface CompletePackageInterface extends PackageInterface
 
 
 
-public function getScripts();
 
+public function getScripts();
 
 
 
@@ -70,6 +70,7 @@ public function getHomepage();
 
 
 
+
 public function getAuthors();
 
 
@@ -77,7 +78,18 @@ public function getAuthors();
 
 
 
+
 public function getSupport();
+
+
+
+
+
+
+
+
+
+public function getFunding();
 
 
 

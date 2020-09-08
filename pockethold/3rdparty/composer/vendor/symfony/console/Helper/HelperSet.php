@@ -33,7 +33,7 @@ private $command;
 public function __construct(array $helpers = array())
 {
 foreach ($helpers as $alias => $helper) {
-$this->set($helper, is_int($alias) ? null : $alias);
+$this->set($helper, \is_int($alias) ? null : $alias);
 }
 }
 

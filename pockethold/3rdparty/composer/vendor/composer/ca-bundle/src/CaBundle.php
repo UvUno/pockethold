@@ -66,32 +66,21 @@ public static function getSystemCaRootBundlePath(LoggerInterface $logger = null)
 if (self::$caPath !== null) {
 return self::$caPath;
 }
+$caBundlePaths = array();
 
-
- 
- $envCertFile = getenv('SSL_CERT_FILE');
-if ($envCertFile && is_readable($envCertFile) && static::validateCaFile($envCertFile, $logger)) {
-return self::$caPath = $envCertFile;
-}
 
 
  
- $envCertDir = getenv('SSL_CERT_DIR');
-if ($envCertDir && is_dir($envCertDir) && is_readable($envCertDir)) {
-return self::$caPath = $envCertDir;
-}
+ $caBundlePaths[] = self::getEnvVariable('SSL_CERT_FILE');
 
-$configured = ini_get('openssl.cafile');
-if ($configured && strlen($configured) > 0 && is_readable($configured) && static::validateCaFile($configured, $logger)) {
-return self::$caPath = $configured;
-}
 
-$configured = ini_get('openssl.capath');
-if ($configured && is_dir($configured) && is_readable($configured)) {
-return self::$caPath = $configured;
-}
+ 
+ $caBundlePaths[] = self::getEnvVariable('SSL_CERT_DIR');
 
-$caBundlePaths = array(
+$caBundlePaths[] = ini_get('openssl.cafile');
+$caBundlePaths[] = ini_get('openssl.capath');
+
+$otherLocations = array(
 '/etc/pki/tls/certs/ca-bundle.crt', 
  '/etc/ssl/certs/ca-certificates.crt', 
  '/etc/ssl/ca-bundle.pem', 
@@ -103,17 +92,21 @@ $caBundlePaths = array(
  '/etc/ssl/cert.pem', 
  '/usr/local/etc/ssl/cert.pem', 
  '/usr/local/etc/openssl/cert.pem', 
+ '/usr/local/etc/openssl@1.1/cert.pem', 
  );
 
-foreach ($caBundlePaths as $caBundle) {
-if (@is_readable($caBundle) && static::validateCaFile($caBundle, $logger)) {
-return self::$caPath = $caBundle;
-}
+foreach($otherLocations as $location) {
+$otherLocations[] = dirname($location);
 }
 
+$caBundlePaths = array_merge($caBundlePaths, $otherLocations);
+
 foreach ($caBundlePaths as $caBundle) {
-$caBundle = dirname($caBundle);
-if (@is_dir($caBundle) && glob($caBundle.'/*')) {
+if (self::caFileUsable($caBundle, $logger)) {
+return self::$caPath = $caBundle;
+}
+
+if (self::caDirUsable($caBundle)) {
 return self::$caPath = $caBundle;
 }
 }
@@ -181,6 +174,7 @@ $warned = true;
 
 $isValid = !empty($contents);
 } else {
+$contents = preg_replace("/^(\\-+(?:BEGIN|END))\\s+TRUSTED\\s+(CERTIFICATE\\-+)\$/m", '$1 $2', $contents);
 $isValid = (bool) openssl_x509_parse($contents);
 }
 
@@ -304,5 +298,28 @@ public static function reset()
 self::$caFileValidity = array();
 self::$caPath = null;
 self::$useOpensslParse = null;
+}
+
+private static function getEnvVariable($name)
+{
+if (isset($_SERVER[$name])) {
+return (string) $_SERVER[$name];
+}
+
+if (PHP_SAPI === 'cli' && ($value = getenv($name)) !== false && $value !== null) {
+return (string) $value;
+}
+
+return false;
+}
+
+private static function caFileUsable($certFile, LoggerInterface $logger = null)
+{
+return $certFile && @is_file($certFile) && @is_readable($certFile) && static::validateCaFile($certFile, $logger);
+}
+
+private static function caDirUsable($certDir)
+{
+return $certDir && @is_dir($certDir) && @is_readable($certDir) && glob($certDir . '/*');
 }
 }

@@ -14,6 +14,7 @@ namespace Composer;
 
 use Composer\Package\RootPackageInterface;
 use Composer\Package\Locker;
+use Composer\Util\Loop;
 use Composer\Repository\RepositoryManager;
 use Composer\Installer\InstallationManager;
 use Composer\Plugin\PluginManager;
@@ -29,9 +30,57 @@ use Composer\Package\Archiver\ArchiveManager;
 
 class Composer
 {
-const VERSION = '1.7.2';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const VERSION = '2.0.0-alpha3';
 const BRANCH_ALIAS_VERSION = '';
-const RELEASE_DATE = '2018-08-16 16:57:12';
+const RELEASE_DATE = '2020-08-03 11:52:10';
+const SOURCE_VERSION = '';
+
+
+
+
+
+
+
+
+
+
+const RUNTIME_API_VERSION = '2.0.0';
+
+public static function getVersion()
+{
+
+ if (self::VERSION === '@package_version'.'@') {
+return self::SOURCE_VERSION;
+}
+
+
+ if (self::BRANCH_ALIAS_VERSION !== '' && preg_match('{^[a-f0-9]{40}$}', self::VERSION)) {
+return self::BRANCH_ALIAS_VERSION.'+'.self::VERSION;
+}
+
+return self::VERSION;
+}
 
 
 
@@ -42,6 +91,11 @@ private $package;
 
 
 private $locker;
+
+
+
+
+private $loop;
 
 
 
@@ -130,6 +184,22 @@ $this->locker = $locker;
 public function getLocker()
 {
 return $this->locker;
+}
+
+
+
+
+public function setLoop(Loop $loop)
+{
+$this->loop = $loop;
+}
+
+
+
+
+public function getLoop()
+{
+return $this->loop;
 }
 
 

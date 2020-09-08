@@ -97,7 +97,7 @@ private function parseShortOption($token)
 {
 $name = substr($token, 1);
 
-if (strlen($name) > 1) {
+if (\strlen($name) > 1) {
 if ($this->definition->hasShortcut($name[0]) && $this->definition->getOptionForShortcut($name[0])->acceptValue()) {
 
  $this->addShortOption($name[0], substr($name, 1));
@@ -118,10 +118,11 @@ $this->addShortOption($name, null);
 
 private function parseShortOptionSet($name)
 {
-$len = strlen($name);
+$len = \strlen($name);
 for ($i = 0; $i < $len; ++$i) {
 if (!$this->definition->hasShortcut($name[$i])) {
-throw new RuntimeException(sprintf('The "-%s" option does not exist.', $name[$i]));
+$encoding = mb_detect_encoding($name, null, true);
+throw new RuntimeException(sprintf('The "-%s" option does not exist.', false === $encoding ? $name[$i] : mb_substr($name, $i, 1, $encoding)));
 }
 
 $option = $this->definition->getOptionForShortcut($name[$i]);
@@ -145,7 +146,7 @@ private function parseLongOption($token)
 $name = substr($token, 2);
 
 if (false !== $pos = strpos($name, '=')) {
-if (0 === strlen($value = substr($name, $pos + 1))) {
+if (0 === \strlen($value = substr($name, $pos + 1))) {
 array_unshift($this->parsed, null);
 }
 $this->addLongOption(substr($name, 0, $pos), $value);
@@ -163,7 +164,7 @@ $this->addLongOption($name, null);
 
 private function parseArgument($token)
 {
-$c = count($this->arguments);
+$c = \count($this->arguments);
 
 
  if ($this->definition->hasArgument($c)) {
@@ -178,7 +179,7 @@ $this->arguments[$arg->getName()][] = $token;
 
  } else {
 $all = $this->definition->getArguments();
-if (count($all)) {
+if (\count($all)) {
 throw new RuntimeException(sprintf('Too many arguments, expected arguments "%s".', implode('" "', array_keys($all))));
 }
 
@@ -228,7 +229,7 @@ if (null !== $value && !$option->acceptValue()) {
 throw new RuntimeException(sprintf('The "--%s" option does not accept a value.', $name));
 }
 
-if (null === $value && $option->acceptValue() && count($this->parsed)) {
+if (null === $value && $option->acceptValue() && \count($this->parsed)) {
 
  
  $next = array_shift($this->parsed);
@@ -302,7 +303,7 @@ public function getParameterOption($values, $default = false)
 $values = (array) $values;
 $tokens = $this->tokens;
 
-while (0 < count($tokens)) {
+while (0 < \count($tokens)) {
 $token = array_shift($tokens);
 
 foreach ($values as $value) {
@@ -314,7 +315,7 @@ return array_shift($tokens);
  
  $leading = 0 === strpos($value, '--') ? $value.'=' : $value;
 if ('' !== $leading && 0 === strpos($token, $leading)) {
-return substr($token, strlen($leading));
+return substr($token, \strlen($leading));
 }
 }
 }

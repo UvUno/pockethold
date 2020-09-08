@@ -39,12 +39,12 @@ $args = $this->findArguments();
 $args = $includeArgs && $args ? ' '.implode(' ', $args) : '';
 
 
- if (defined('HHVM_VERSION')) {
+ if (\defined('HHVM_VERSION')) {
 return (getenv('PHP_BINARY') ?: PHP_BINARY).$args;
 }
 
 
- if (defined('PHP_BINARY') && PHP_BINARY && \in_array(PHP_SAPI, array('cli', 'cli-server', 'phpdbg'), true)) {
+ if (\defined('PHP_BINARY') && PHP_BINARY && \in_array(\PHP_SAPI, array('cli', 'cli-server', 'phpdbg'), true)) {
 return PHP_BINARY.$args;
 }
 
@@ -62,12 +62,12 @@ return $php;
 }
 }
 
-if (@is_executable($php = PHP_BINDIR.('\\' === DIRECTORY_SEPARATOR ? '\\php.exe' : '/php'))) {
+if (@is_executable($php = PHP_BINDIR.('\\' === \DIRECTORY_SEPARATOR ? '\\php.exe' : '/php'))) {
 return $php;
 }
 
 $dirs = array(PHP_BINDIR);
-if ('\\' === DIRECTORY_SEPARATOR) {
+if ('\\' === \DIRECTORY_SEPARATOR) {
 $dirs[] = 'C:\xampp\php\\';
 }
 
@@ -83,9 +83,9 @@ public function findArguments()
 {
 $arguments = array();
 
-if (defined('HHVM_VERSION')) {
+if (\defined('HHVM_VERSION')) {
 $arguments[] = '--php';
-} elseif ('phpdbg' === PHP_SAPI) {
+} elseif ('phpdbg' === \PHP_SAPI) {
 $arguments[] = '-qrr';
 }
 

@@ -4,6 +4,7 @@ namespace Psr\Log\Test;
 
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
+use PHPUnit\Framework\TestCase;
 
 
 
@@ -11,7 +12,7 @@ use Psr\Log\LogLevel;
 
 
 
-abstract class LoggerInterfaceTest extends \PHPUnit_Framework_TestCase
+abstract class LoggerInterfaceTest extends TestCase
 {
 
 
@@ -101,6 +102,9 @@ $this->assertEquals($expected, $this->getLogs());
 
 public function testContextCanContainAnything()
 {
+$closed = fopen('php://memory', 'r');
+fclose($closed);
+
 $context = array(
 'bool' => true,
 'null' => null,
@@ -110,6 +114,7 @@ $context = array(
 'nested' => array('with object' => new DummyTest),
 'object' => new \DateTime,
 'resource' => fopen('php://memory', 'r'),
+'closed' => $closed,
 );
 
 $this->getLogger()->warning('Crazy context data', $context);
@@ -129,12 +134,5 @@ $expected = array(
 'critical Uncaught Exception!'
 );
 $this->assertEquals($expected, $this->getLogs());
-}
-}
-
-class DummyTest
-{
-public function __toString()
-{
 }
 }

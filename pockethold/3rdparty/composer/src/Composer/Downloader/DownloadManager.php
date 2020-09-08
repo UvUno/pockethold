@@ -15,6 +15,8 @@ namespace Composer\Downloader;
 use Composer\Package\PackageInterface;
 use Composer\IO\IOInterface;
 use Composer\Util\Filesystem;
+use Composer\Exception\IrrecoverableDownloadException;
+use React\Promise\PromiseInterface;
 
 
 
@@ -23,11 +25,17 @@ use Composer\Util\Filesystem;
 
 class DownloadManager
 {
+
 private $io;
+
 private $preferDist = false;
+
 private $preferSource = false;
+
 private $packagePreferences = array();
+
 private $filesystem;
+
 private $downloaders = array();
 
 
@@ -90,22 +98,6 @@ return $this;
 
 
 
-public function setOutputProgress($outputProgress)
-{
-foreach ($this->downloaders as $downloader) {
-$downloader->setOutputProgress($outputProgress);
-}
-
-return $this;
-}
-
-
-
-
-
-
-
-
 public function setDownloader($type, DownloaderInterface $downloader)
 {
 $type = strtolower($type);
@@ -140,7 +132,7 @@ return $this->downloaders[$type];
 
 
 
-public function getDownloaderForInstalledPackage(PackageInterface $package)
+public function getDownloaderForPackage(PackageInterface $package)
 {
 $installationSource = $package->getInstallationSource();
 
@@ -154,7 +146,7 @@ $downloader = $this->getDownloader($package->getDistType());
 $downloader = $this->getDownloader($package->getSourceType());
 } else {
 throw new \InvalidArgumentException(
-'Package '.$package.' seems not been installed properly'
+'Package '.$package.' does not have an installation source set'
 );
 }
 
@@ -171,65 +163,120 @@ $package
 return $downloader;
 }
 
-
-
-
-
-
-
-
-
-
-
-public function download(PackageInterface $package, $targetDir, $preferSource = null)
+public function getDownloaderType(DownloaderInterface $downloader)
 {
-$preferSource = null !== $preferSource ? $preferSource : $this->preferSource;
-$sourceType = $package->getSourceType();
-$distType = $package->getDistType();
-
-$sources = array();
-if ($sourceType) {
-$sources[] = 'source';
-}
-if ($distType) {
-$sources[] = 'dist';
+return array_search($downloader, $this->downloaders);
 }
 
-if (empty($sources)) {
-throw new \InvalidArgumentException('Package '.$package.' must have a source or dist specified');
-}
 
-if (!$preferSource && ($this->preferDist || 'dist' === $this->resolvePackageInstallPreference($package))) {
-$sources = array_reverse($sources);
-}
 
-$this->filesystem->ensureDirectoryExists($targetDir);
 
-foreach ($sources as $i => $source) {
-if (isset($e)) {
-$this->io->writeError('    <warning>Now trying to download from ' . $source . '</warning>');
+
+
+
+
+
+
+
+
+public function download(PackageInterface $package, $targetDir, PackageInterface $prevPackage = null)
+{
+$targetDir = $this->normalizeTargetDir($targetDir);
+$this->filesystem->ensureDirectoryExists(dirname($targetDir));
+
+$sources = $this->getAvailableSources($package, $prevPackage);
+
+$io = $this->io;
+$self = $this;
+
+$download = function ($retry = false) use (&$sources, $io, $package, $self, $targetDir, &$download, $prevPackage) {
+$source = array_shift($sources);
+if ($retry) {
+$io->writeError('    <warning>Now trying to download from ' . $source . '</warning>');
 }
 $package->setInstallationSource($source);
-try {
-$downloader = $this->getDownloaderForInstalledPackage($package);
-if ($downloader) {
-$downloader->download($package, $targetDir);
+
+$downloader = $self->getDownloaderForPackage($package);
+if (!$downloader) {
+return \React\Promise\resolve();
 }
-break;
-} catch (\RuntimeException $e) {
-if ($i === count($sources) - 1) {
+
+$handleError = function ($e) use ($sources, $source, $package, $io, $download) {
+if ($e instanceof \RuntimeException && !$e instanceof IrrecoverableDownloadException) {
+if (!$sources) {
 throw $e;
 }
 
-$this->io->writeError(
+$io->writeError(
 '    <warning>Failed to download '.
 $package->getPrettyName().
 ' from ' . $source . ': '.
 $e->getMessage().'</warning>'
 );
+
+return $download(true);
+}
+
+throw $e;
+};
+
+try {
+$result = $downloader->download($package, $targetDir, $prevPackage);
+} catch (\Exception $e) {
+return $handleError($e);
+}
+if (!$result instanceof PromiseInterface) {
+return \React\Promise\resolve($result);
+}
+
+$res = $result->then(function ($res) {
+return $res;
+}, $handleError);
+
+return $res;
+};
+
+return $download();
+}
+
+
+
+
+
+
+
+
+
+
+
+public function prepare($type, PackageInterface $package, $targetDir, PackageInterface $prevPackage = null)
+{
+$targetDir = $this->normalizeTargetDir($targetDir);
+$downloader = $this->getDownloaderForPackage($package);
+if ($downloader) {
+return $downloader->prepare($type, $package, $targetDir, $prevPackage);
 }
 }
+
+
+
+
+
+
+
+
+
+
+
+public function install(PackageInterface $package, $targetDir)
+{
+$targetDir = $this->normalizeTargetDir($targetDir);
+$downloader = $this->getDownloaderForPackage($package);
+if ($downloader) {
+return $downloader->install($package, $targetDir);
 }
+}
+
 
 
 
@@ -242,35 +289,25 @@ $e->getMessage().'</warning>'
 
 public function update(PackageInterface $initial, PackageInterface $target, $targetDir)
 {
-$downloader = $this->getDownloaderForInstalledPackage($initial);
-if (!$downloader) {
+$targetDir = $this->normalizeTargetDir($targetDir);
+$downloader = $this->getDownloaderForPackage($target);
+$initialDownloader = $this->getDownloaderForPackage($initial);
+
+
+ if (!$initialDownloader && !$downloader) {
 return;
 }
 
-$installationSource = $initial->getInstallationSource();
 
-if ('dist' === $installationSource) {
-$initialType = $initial->getDistType();
-$targetType = $target->getDistType();
-} else {
-$initialType = $initial->getSourceType();
-$targetType = $target->getSourceType();
+ if (!$downloader) {
+return $initialDownloader->remove($initial, $targetDir);
 }
 
-
- if ($target->isDev() && 'dist' === $installationSource) {
-$downloader->remove($initial, $targetDir);
-$this->download($target, $targetDir);
-
-return;
-}
-
+$initialType = $this->getDownloaderType($initialDownloader);
+$targetType = $this->getDownloaderType($downloader);
 if ($initialType === $targetType) {
-$target->setInstallationSource($installationSource);
 try {
-$downloader->update($initial, $target, $targetDir);
-
-return;
+return $downloader->update($initial, $target, $targetDir);
 } catch (\RuntimeException $e) {
 if (!$this->io->isInteractive()) {
 throw $e;
@@ -282,9 +319,20 @@ throw $e;
 }
 }
 
-$downloader->remove($initial, $targetDir);
-$this->download($target, $targetDir, 'source' === $installationSource);
+
+ 
+ $promise = $initialDownloader->remove($initial, $targetDir);
+if ($promise) {
+$self = $this;
+return $promise->then(function ($res) use ($self, $target, $targetDir) {
+return $self->install($target, $targetDir);
+});
 }
+
+return $this->install($target, $targetDir);
+}
+
+
 
 
 
@@ -294,9 +342,29 @@ $this->download($target, $targetDir, 'source' === $installationSource);
 
 public function remove(PackageInterface $package, $targetDir)
 {
-$downloader = $this->getDownloaderForInstalledPackage($package);
+$targetDir = $this->normalizeTargetDir($targetDir);
+$downloader = $this->getDownloaderForPackage($package);
 if ($downloader) {
-$downloader->remove($package, $targetDir);
+return $downloader->remove($package, $targetDir);
+}
+}
+
+
+
+
+
+
+
+
+
+
+
+public function cleanup($type, PackageInterface $package, $targetDir, PackageInterface $prevPackage = null)
+{
+$targetDir = $this->normalizeTargetDir($targetDir);
+$downloader = $this->getDownloaderForPackage($package);
+if ($downloader) {
+return $downloader->cleanup($type, $package, $targetDir, $prevPackage);
 }
 }
 
@@ -321,5 +389,65 @@ return 'source';
 }
 
 return $package->isDev() ? 'source' : 'dist';
+}
+
+
+
+
+private function getAvailableSources(PackageInterface $package, PackageInterface $prevPackage = null)
+{
+$sourceType = $package->getSourceType();
+$distType = $package->getDistType();
+
+
+ $sources = array();
+if ($sourceType) {
+$sources[] = 'source';
+}
+if ($distType) {
+$sources[] = 'dist';
+}
+
+if (empty($sources)) {
+throw new \InvalidArgumentException('Package '.$package.' must have a source or dist specified');
+}
+
+if (
+$prevPackage
+
+ && in_array($prevPackage->getInstallationSource(), $sources, true)
+
+ && !(!$prevPackage->isDev() && $prevPackage->getInstallationSource() === 'dist' && $package->isDev())
+) {
+$prevSource = $prevPackage->getInstallationSource();
+usort($sources, function ($a, $b) use ($prevSource) {
+return $a === $prevSource ? -1 : 1;
+});
+
+return $sources;
+}
+
+
+ if (!$this->preferSource && ($this->preferDist || 'dist' === $this->resolvePackageInstallPreference($package))) {
+$sources = array_reverse($sources);
+}
+
+return $sources;
+}
+
+
+
+
+
+
+
+
+private function normalizeTargetDir($dir)
+{
+if ($dir === '\\' || $dir === '/') {
+return $dir;
+}
+
+return rtrim($dir, '\\/');
 }
 }

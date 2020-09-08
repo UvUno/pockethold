@@ -45,7 +45,7 @@ public function __construct(InputInterface $input, OutputInterface $output)
 $this->input = $input;
 $this->bufferedOutput = new BufferedOutput($output->getVerbosity(), false, clone $output->getFormatter());
 
- $this->lineLength = min($this->getTerminalWidth() - (int) (DIRECTORY_SEPARATOR === '\\'), self::MAX_LINE_LENGTH);
+ $this->lineLength = min($this->getTerminalWidth() - (int) (\DIRECTORY_SEPARATOR === '\\'), self::MAX_LINE_LENGTH);
 
 parent::__construct($output);
 }
@@ -61,7 +61,7 @@ parent::__construct($output);
 
 public function block($messages, $type = null, $style = null, $prefix = ' ', $padding = false)
 {
-$messages = is_array($messages) ? array_values($messages) : array($messages);
+$messages = \is_array($messages) ? array_values($messages) : array($messages);
 
 $this->autoPrependBlock();
 $this->writeln($this->createBlock($messages, $type, $style, $prefix, $padding, true));
@@ -115,7 +115,7 @@ public function text($message)
 {
 $this->autoPrependText();
 
-$messages = is_array($message) ? array_values($message) : array($message);
+$messages = \is_array($message) ? array_values($message) : array($message);
 foreach ($messages as $message) {
 $this->writeln(sprintf(' %s', $message));
 }
@@ -128,7 +128,7 @@ $this->writeln(sprintf(' %s', $message));
 
 public function comment($message)
 {
-$messages = is_array($message) ? array_values($message) : array($message);
+$messages = \is_array($message) ? array_values($message) : array($message);
 
 $this->autoPrependBlock();
 $this->writeln($this->createBlock($messages, null, null, '<fg=default;bg=default> // </>'));
@@ -271,7 +271,7 @@ public function createProgressBar($max = 0)
 {
 $progressBar = parent::createProgressBar($max);
 
-if ('\\' !== DIRECTORY_SEPARATOR || 'Hyper' === getenv('TERM_PROGRAM')) {
+if ('\\' !== \DIRECTORY_SEPARATOR || 'Hyper' === getenv('TERM_PROGRAM')) {
 $progressBar->setEmptyBarCharacter('░'); 
  $progressBar->setProgressCharacter('');
 $progressBar->setBarCharacter('▓'); 
@@ -387,7 +387,7 @@ $lines = array();
 
 if (null !== $type) {
 $type = sprintf('[%s] ', $type);
-$indentLength = strlen($type);
+$indentLength = \strlen($type);
 $lineIndentation = str_repeat(' ', $indentLength);
 }
 
@@ -399,7 +399,7 @@ $message = OutputFormatter::escape($message);
 
 $lines = array_merge($lines, explode(PHP_EOL, wordwrap($message, $this->lineLength - $prefixLength - $indentLength, PHP_EOL, true)));
 
-if (count($messages) > 1 && $key < count($messages) - 1) {
+if (\count($messages) > 1 && $key < \count($messages) - 1) {
 $lines[] = '';
 }
 }

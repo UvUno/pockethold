@@ -11,8 +11,8 @@
 
 namespace Symfony\Component\Console\Helper;
 
-use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Exception\InvalidArgumentException;
+use Symfony\Component\Console\Output\OutputInterface;
 
 
 
@@ -171,7 +171,7 @@ return $this->getStyle();
 public function setHeaders(array $headers)
 {
 $headers = array_values($headers);
-if (!empty($headers) && !is_array($headers[0])) {
+if (!empty($headers) && !\is_array($headers[0])) {
 $headers = array($headers);
 }
 
@@ -204,7 +204,7 @@ $this->rows[] = $row;
 return $this;
 }
 
-if (!is_array($row)) {
+if (!\is_array($row)) {
 throw new InvalidArgumentException('A row must be an array or a TableSeparator instance.');
 }
 
@@ -219,7 +219,6 @@ $this->rows[$column] = $row;
 
 return $this;
 }
-
 
 
 
@@ -268,6 +267,8 @@ $this->cleanup();
 
 
 
+
+
 private function renderRowSeparator()
 {
 if (0 === $count = $this->numberOfColumns) {
@@ -293,6 +294,8 @@ private function renderColumnSeparator()
 {
 return sprintf($this->style->getBorderFormat(), $this->style->getVerticalBorderChar());
 }
+
+
 
 
 
@@ -336,7 +339,7 @@ $width += $this->getColumnSeparatorWidth() + $this->columnWidths[$nextColumn];
 
 
  if (false !== $encoding = mb_detect_encoding($cell, null, true)) {
-$width += strlen($cell) - mb_strwidth($cell, $encoding);
+$width += \strlen($cell) - mb_strwidth($cell, $encoding);
 }
 
 $style = $this->getColumnStyle($column);
@@ -375,7 +378,7 @@ $this->numberOfColumns = max($columns);
 private function buildTableRows($rows)
 {
 $unmergedRows = array();
-for ($rowKey = 0; $rowKey < count($rows); ++$rowKey) {
+for ($rowKey = 0; $rowKey < \count($rows); ++$rowKey) {
 $rows = $this->fillNextRows($rows, $rowKey);
 
 
@@ -425,7 +428,7 @@ $nbLines = $cell->getRowspan() - 1;
 $lines = array($cell);
 if (strstr($cell, "\n")) {
 $lines = explode("\n", str_replace("\n", "<fg=default;bg=default>\n</>", $cell));
-$nbLines = count($lines) > $nbLines ? substr_count($cell, "\n") : $nbLines;
+$nbLines = \count($lines) > $nbLines ? substr_count($cell, "\n") : $nbLines;
 
 $rows[$line][$column] = new TableCell($lines[0], array('colspan' => $cell->getColspan()));
 unset($lines[0]);
@@ -445,7 +448,7 @@ break;
 
 foreach ($unmergedRows as $unmergedRowKey => $unmergedRow) {
 
- if (isset($rows[$unmergedRowKey]) && is_array($rows[$unmergedRowKey]) && ($this->getNumberOfColumns($rows[$unmergedRowKey]) + $this->getNumberOfColumns($unmergedRows[$unmergedRowKey]) <= $this->numberOfColumns)) {
+ if (isset($rows[$unmergedRowKey]) && \is_array($rows[$unmergedRowKey]) && ($this->getNumberOfColumns($rows[$unmergedRowKey]) + $this->getNumberOfColumns($unmergedRows[$unmergedRowKey]) <= $this->numberOfColumns)) {
 foreach ($unmergedRow as $cellKey => $cell) {
 
  array_splice($rows[$unmergedRowKey], $cellKey, 0, array($cell));
@@ -511,7 +514,7 @@ return $row;
 
 private function getNumberOfColumns(array $row)
 {
-$columns = count($row);
+$columns = \count($row);
 foreach ($row as $column) {
 $columns += $column instanceof TableCell ? ($column->getColspan() - 1) : 0;
 }
@@ -567,7 +570,7 @@ $row[$i + $position] = $content;
 $lengths[] = $this->getCellWidth($row, $column);
 }
 
-$this->columnWidths[$column] = max($lengths) + strlen($this->style->getCellRowContentFormat()) - 2;
+$this->columnWidths[$column] = max($lengths) + Helper::strlen($this->style->getCellRowContentFormat()) - 2;
 }
 }
 
@@ -578,7 +581,7 @@ $this->columnWidths[$column] = max($lengths) + strlen($this->style->getCellRowCo
 
 private function getColumnSeparatorWidth()
 {
-return strlen(sprintf($this->style->getBorderFormat(), $this->style->getVerticalBorderChar()));
+return Helper::strlen(sprintf($this->style->getBorderFormat(), $this->style->getVerticalBorderChar()));
 }
 
 

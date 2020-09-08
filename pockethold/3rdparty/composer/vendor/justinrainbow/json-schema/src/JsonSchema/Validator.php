@@ -36,8 +36,6 @@ const ERROR_SCHEMA_VALIDATION = 0x00000002;
 
 
 
-
-
 public function validate(&$value, $schema = null, $checkMode = null)
 {
 

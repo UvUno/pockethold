@@ -13,6 +13,7 @@
 namespace Composer\Repository\Vcs;
 
 use Composer\Config;
+use Composer\Cache;
 use Composer\Util\Hg as HgUtils;
 use Composer\Util\ProcessExecutor;
 use Composer\Util\Filesystem;
@@ -37,6 +38,10 @@ public function initialize()
 if (Filesystem::isLocalPath($this->url)) {
 $this->repoDir = $this->url;
 } else {
+if (!Cache::isUsable($this->config->get('cache-vcs-dir'))) {
+throw new \RuntimeException('HgDriver requires a usable cache directory, and it looks like you set it to be disabled');
+}
+
 $cacheDir = $this->config->get('cache-vcs-dir');
 $this->repoDir = $cacheDir . '/' . preg_replace('{[^a-z0-9]}i', '-', $this->url) . '/';
 
@@ -61,11 +66,12 @@ $this->io->writeError('<error>Failed to update '.$this->url.', package informati
 
  $fs->removeDirectory($this->repoDir);
 
-$command = function ($url) {
-return sprintf('hg clone --noupdate %s %s', ProcessExecutor::escape($url), ProcessExecutor::escape($this->repoDir));
+$repoDir = $this->repoDir;
+$command = function ($url) use ($repoDir) {
+return sprintf('hg clone --noupdate %s %s', ProcessExecutor::escape($url), ProcessExecutor::escape($repoDir));
 };
 
-$hgUtils->runCommand($command, $this->url, $this->repoDir);
+$hgUtils->runCommand($command, $this->url, null);
 }
 }
 
@@ -211,7 +217,7 @@ if (!is_dir($url)) {
 return false;
 }
 
-$process = new ProcessExecutor();
+$process = new ProcessExecutor($io);
 
  if ($process->execute('hg summary', $output, $url) === 0) {
 return true;
@@ -222,8 +228,8 @@ if (!$deep) {
 return false;
 }
 
-$processExecutor = new ProcessExecutor();
-$exit = $processExecutor->execute(sprintf('hg identify %s', ProcessExecutor::escape($url)), $ignored);
+$process = new ProcessExecutor($io);
+$exit = $process->execute(sprintf('hg identify %s', ProcessExecutor::escape($url)), $ignored);
 
 return $exit === 0;
 }

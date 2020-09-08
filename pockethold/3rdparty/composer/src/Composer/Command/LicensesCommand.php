@@ -21,6 +21,7 @@ use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\SymfonyStyle;
 
 
 
@@ -33,7 +34,7 @@ $this
 ->setName('licenses')
 ->setDescription('Shows information about licenses of dependencies.')
 ->setDefinition(array(
-new InputOption('format', 'f', InputOption::VALUE_REQUIRED, 'Format of the output: text or json', 'text'),
+new InputOption('format', 'f', InputOption::VALUE_REQUIRED, 'Format of the output: text, json or summary', 'text'),
 new InputOption('no-dev', null, InputOption::VALUE_NONE, 'Disables search in require-dev packages.'),
 ))
 ->setHelp(
@@ -41,6 +42,7 @@ new InputOption('no-dev', null, InputOption::VALUE_NONE, 'Disables search in req
 The license command displays detailed information about the licenses of
 the installed dependencies.
 
+Read more at https://getcomposer.org/doc/03-cli.md#licenses
 EOT
 )
 ;
@@ -76,7 +78,11 @@ $io->write('');
 $table = new Table($output);
 $table->setStyle('compact');
 $tableStyle = $table->getStyle();
+if (method_exists($tableStyle, 'setVerticalBorderChars')) {
+$tableStyle->setVerticalBorderChars('');
+} else {
 $tableStyle->setVerticalBorderChar('');
+}
 $tableStyle->setCellRowContentFormat('%s  ');
 $table->setHeaders(array('Name', 'Version', 'License'));
 foreach ($packages as $package) {
@@ -106,9 +112,36 @@ $io->write(JsonFile::encode(array(
 )));
 break;
 
+case 'summary':
+$usedLicenses = array();
+foreach ($packages as $package) {
+$license = $package->getLicense();
+$licenseName = $license[0];
+if (!isset($usedLicenses[$licenseName])) {
+$usedLicenses[$licenseName] = 0;
+}
+$usedLicenses[$licenseName]++;
+}
+
+
+ arsort($usedLicenses, SORT_NUMERIC);
+
+$rows = array();
+foreach ($usedLicenses as $usedLicense => $numberOfDependencies) {
+$rows[] = array($usedLicense, $numberOfDependencies);
+}
+
+$symfonyIo = new SymfonyStyle($input, $output);
+$symfonyIo->table(
+array('License', 'Number of dependencies'),
+$rows
+);
+break;
 default:
 throw new \RuntimeException(sprintf('Unsupported format "%s".  See help for supported formats.', $format));
 }
+
+return 0;
 }
 
 

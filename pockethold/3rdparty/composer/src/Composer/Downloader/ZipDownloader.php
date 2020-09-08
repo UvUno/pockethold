@@ -19,7 +19,8 @@ use Composer\Package\PackageInterface;
 use Composer\Util\IniHelper;
 use Composer\Util\Platform;
 use Composer\Util\ProcessExecutor;
-use Composer\Util\RemoteFilesystem;
+use Composer\Util\Filesystem;
+use Composer\Util\HttpDownloader;
 use Composer\IO\IOInterface;
 use Symfony\Component\Process\ExecutableFinder;
 use ZipArchive;
@@ -33,19 +34,13 @@ protected static $hasSystemUnzip;
 private static $hasZipArchive;
 private static $isWindows;
 
-protected $process;
+
 private $zipArchiveObject;
 
-public function __construct(IOInterface $io, Config $config, EventDispatcher $eventDispatcher = null, Cache $cache = null, ProcessExecutor $process = null, RemoteFilesystem $rfs = null)
-{
-$this->process = $process ?: new ProcessExecutor($io);
-parent::__construct($io, $config, $eventDispatcher, $cache, $rfs);
-}
 
 
 
-
-public function download(PackageInterface $package, $path, $output = true)
+public function download(PackageInterface $package, $path, PackageInterface $prevPackage = null, $output = true)
 {
 if (null === self::$hasSystemUnzip) {
 $finder = new ExecutableFinder;
@@ -69,11 +64,12 @@ self::$isWindows = Platform::isWindows();
 
 if (!self::$isWindows && !self::$hasSystemUnzip) {
 $this->io->writeError("<warning>As there is no 'unzip' command installed zip files are being unpacked using the PHP zip extension.</warning>");
-$this->io->writeError("<warning>This may cause invalid reports of corrupted archives. Installing 'unzip' may remediate them.</warning>");
+$this->io->writeError("<warning>This may cause invalid reports of corrupted archives. Besides, any UNIX permissions (e.g. executable) defined in the archives will be lost.</warning>");
+$this->io->writeError("<warning>Installing 'unzip' may remediate them.</warning>");
 }
 }
 
-return parent::download($package, $path, $output);
+return parent::download($package, $path, $prevPackage, $output);
 }
 
 
@@ -83,8 +79,7 @@ return parent::download($package, $path, $output);
 
 
 
-
-protected function extractWithSystemUnzip($file, $path, $isLastChance)
+private function extractWithSystemUnzip(PackageInterface $package, $file, $path, $isLastChance, $async = false)
 {
 if (!self::$hasZipArchive) {
 
@@ -94,21 +89,59 @@ if (!self::$hasZipArchive) {
 if (!self::$hasSystemUnzip && !$isLastChance) {
 
  
- return $this->extractWithZipArchive($file, $path, true);
+ return $this->extractWithZipArchive($package, $file, $path, true);
+}
+
+
+ $overwrite = $isLastChance ? '-o' : '';
+$command = 'unzip -qq '.$overwrite.' '.ProcessExecutor::escape($file).' -d '.ProcessExecutor::escape($path);
+
+if ($async) {
+$self = $this;
+$io = $this->io;
+$tryFallback = function ($processError) use ($isLastChance, $io, $self, $file, $path, $package) {
+if ($isLastChance) {
+throw $processError;
+}
+
+if (!is_file($file)) {
+$io->writeError('    <warning>'.$processError->getMessage().'</warning>');
+$io->writeError('    <warning>This most likely is due to a custom installer plugin not handling the returned Promise from the downloader</warning>');
+$io->writeError('    <warning>See https://github.com/composer/installers/commit/5006d0c28730ade233a8f42ec31ac68fb1c5c9bb for an example fix</warning>');
+} else {
+$io->writeError('    <warning>'.$processError->getMessage().'</warning>');
+$io->writeError('    The archive may contain identical file names with different capitalization (which fails on case insensitive filesystems)');
+$io->writeError('    Unzip with unzip command failed, falling back to ZipArchive class');
+}
+
+return $self->extractWithZipArchive($package, $file, $path, true);
+};
+
+try {
+$promise = $this->process->executeAsync($command);
+
+return $promise->then(function ($process) use ($tryFallback, $command, $package, $file) {
+if (!$process->isSuccessful()) {
+$output = $process->getErrorOutput();
+$output = str_replace(', '.$file.'.zip or '.$file.'.ZIP', '', $output);
+
+return $tryFallback(new \RuntimeException('Failed to extract '.$package->getName().': ('.$process->getExitCode().') '.$command."\n\n".$output));
+}
+});
+} catch (\Exception $e) {
+return $tryFallback($e);
+} catch (\Throwable $e) {
+return $tryFallback($e);
+}
 }
 
 $processError = null;
-
- $overwrite = $isLastChance ? '-o' : '';
-
-$command = 'unzip -qq '.$overwrite.' '.ProcessExecutor::escape($file).' -d '.ProcessExecutor::escape($path);
-
 try {
-if (0 === $this->process->execute($command, $ignoredOutput)) {
-return true;
+if (0 === $exitCode = $this->process->execute($command, $ignoredOutput)) {
+return \React\Promise\resolve();
 }
 
-$processError = new \RuntimeException('Failed to execute ' . $command . "\n\n" . $this->process->getErrorOutput());
+$processError = new \RuntimeException('Failed to execute ('.$exitCode.') '.$command."\n\n".$this->process->getErrorOutput());
 } catch (\Exception $e) {
 $processError = $e;
 }
@@ -117,11 +150,11 @@ if ($isLastChance) {
 throw $processError;
 }
 
-$this->io->writeError('    '.$processError->getMessage());
+$this->io->writeError('    <warning>'.$processError->getMessage().'</warning>');
 $this->io->writeError('    The archive may contain identical file names with different capitalization (which fails on case insensitive filesystems)');
 $this->io->writeError('    Unzip with unzip command failed, falling back to ZipArchive class');
 
-return $this->extractWithZipArchive($file, $path, true);
+return $this->extractWithZipArchive($package, $file, $path, true);
 }
 
 
@@ -132,7 +165,9 @@ return $this->extractWithZipArchive($file, $path, true);
 
 
 
-protected function extractWithZipArchive($file, $path, $isLastChance)
+
+
+public function extractWithZipArchive(PackageInterface $package, $file, $path, $isLastChance)
 {
 if (!self::$hasSystemUnzip) {
 
@@ -142,7 +177,7 @@ if (!self::$hasSystemUnzip) {
 if (!self::$hasZipArchive && !$isLastChance) {
 
  
- return $this->extractWithSystemUnzip($file, $path, true);
+ return $this->extractWithSystemUnzip($package, $file, $path, true);
 }
 
 $processError = null;
@@ -155,7 +190,7 @@ $extractResult = $zipArchive->extractTo($path);
 if (true === $extractResult) {
 $zipArchive->close();
 
-return true;
+return \React\Promise\resolve();
 }
 
 $processError = new \RuntimeException(rtrim("There was an error extracting the ZIP file, it is either corrupted or using an invalid format.\n"));
@@ -166,16 +201,18 @@ $processError = new \UnexpectedValueException(rtrim($this->getErrorMessage($retv
 $processError = new \RuntimeException('The archive may contain identical file names with different capitalization (which fails on case insensitive filesystems): '.$e->getMessage(), 0, $e);
 } catch (\Exception $e) {
 $processError = $e;
+} catch (\Throwable $e) {
+$processError = $e;
 }
 
 if ($isLastChance) {
 throw $processError;
 }
 
-$this->io->writeError('    '.$processError->getMessage());
+$this->io->writeError('    <warning>'.$processError->getMessage().'</warning>');
 $this->io->writeError('    Unzip with ZipArchive class failed, falling back to unzip command');
 
-return $this->extractWithSystemUnzip($file, $path, true);
+return $this->extractWithSystemUnzip($package, $file, $path, true);
 }
 
 
@@ -184,14 +221,14 @@ return $this->extractWithSystemUnzip($file, $path, true);
 
 
 
-public function extract($file, $path)
+public function extract(PackageInterface $package, $file, $path)
 {
 
  if (self::$isWindows) {
-$this->extractWithZipArchive($file, $path, false);
-} else {
-$this->extractWithSystemUnzip($file, $path, false);
+return $this->extractWithZipArchive($package, $file, $path, false);
 }
+
+return $this->extractWithSystemUnzip($package, $file, $path, false, true);
 }
 
 

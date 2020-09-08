@@ -11,9 +11,9 @@
 
 namespace Symfony\Component\Console\Helper;
 
+use Symfony\Component\Console\Exception\LogicException;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Exception\LogicException;
 
 
 
@@ -444,7 +444,7 @@ $output = $this->output;
 $messages = $this->messages;
 $this->overwrite(preg_replace_callback("{%([a-z\-_]+)(?:\:([^%]+))?%}i", function ($matches) use ($self, $output, $messages) {
 if ($formatter = $self::getPlaceholderFormatterDefinition($matches[1])) {
-$text = call_user_func($formatter, $self, $output);
+$text = \call_user_func($formatter, $self, $output);
 } elseif (isset($messages[$matches[1]])) {
 $text = $messages[$matches[1]];
 } else {

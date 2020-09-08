@@ -36,6 +36,8 @@ new InputOption('direct', 'D', InputOption::VALUE_NONE, 'Shows only packages tha
 new InputOption('strict', null, InputOption::VALUE_NONE, 'Return a non-zero exit code when there are outdated packages'),
 new InputOption('minor-only', 'm', InputOption::VALUE_NONE, 'Show only packages that have minor SemVer-compatible updates. Use with the --outdated option.'),
 new InputOption('format', 'f', InputOption::VALUE_REQUIRED, 'Format of the output: text or json', 'text'),
+new InputOption('ignore', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Ignore specified package(s). Use it with the --outdated option if you don\'t want to be informed about new versions of some packages.'),
+new InputOption('no-dev', null, InputOption::VALUE_NONE, 'Disables search in require-dev packages.'),
 ))
 ->setHelp(
 <<<EOT
@@ -49,7 +51,7 @@ The color coding (or signage if you have ANSI colors disabled) for dependency ve
   may involve work.
 - <highlight>red</highlight> (!): Dependency has a new version that is semver-compatible and you should upgrade it.
 
-
+Read more at https://getcomposer.org/doc/03-cli.md#outdated
 EOT
 )
 ;
@@ -58,7 +60,7 @@ EOT
 protected function execute(InputInterface $input, OutputInterface $output)
 {
 $args = array(
-'show',
+'command' => 'show',
 '--latest' => true,
 );
 if (!$input->getOption('all')) {
@@ -76,7 +78,11 @@ $args['--strict'] = true;
 if ($input->getOption('minor-only')) {
 $args['--minor-only'] = true;
 }
+if ($input->getOption('no-dev')) {
+$args['--no-dev'] = true;
+}
 $args['--format'] = $input->getOption('format');
+$args['--ignore'] = $input->getOption('ignore');
 
 $input = new ArrayInput($args);
 

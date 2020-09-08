@@ -11,8 +11,8 @@
 
 namespace Symfony\Component\Filesystem;
 
-use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Exception\FileNotFoundException;
+use Symfony\Component\Filesystem\Exception\IOException;
 
 
 
@@ -44,7 +44,7 @@ if ($originIsLocal && !is_file($originFile)) {
 throw new FileNotFoundException(sprintf('Failed to copy "%s" because file does not exist.', $originFile), 0, null, $originFile);
 }
 
-$this->mkdir(dirname($targetFile));
+$this->mkdir(\dirname($targetFile));
 
 $doCopy = true;
 if (!$overwriteNewerFiles && null === parse_url($originFile, PHP_URL_HOST) && is_file($targetFile)) {
@@ -121,7 +121,7 @@ public function exists($files)
 $maxPathLength = PHP_MAXPATHLEN - 2;
 
 foreach ($this->toIterator($files) as $file) {
-if (strlen($file) > $maxPathLength) {
+if (\strlen($file) > $maxPathLength) {
 throw new IOException(sprintf('Could not check if file exist because path length exceeds %d characters.', $maxPathLength), 0, null, $file);
 }
 
@@ -163,14 +163,14 @@ public function remove($files)
 {
 if ($files instanceof \Traversable) {
 $files = iterator_to_array($files, false);
-} elseif (!is_array($files)) {
+} elseif (!\is_array($files)) {
 $files = array($files);
 }
 $files = array_reverse($files);
 foreach ($files as $file) {
 if (is_link($file)) {
 
- if (!(self::box('unlink', $file) || '\\' !== DIRECTORY_SEPARATOR || self::box('rmdir', $file)) && file_exists($file)) {
+ if (!(self::box('unlink', $file) || '\\' !== \DIRECTORY_SEPARATOR || self::box('rmdir', $file)) && file_exists($file)) {
 throw new IOException(sprintf('Failed to remove symlink "%s": %s.', $file, self::$lastError));
 }
 } elseif (is_dir($file)) {
@@ -222,7 +222,7 @@ foreach ($this->toIterator($files) as $file) {
 if ($recursive && is_dir($file) && !is_link($file)) {
 $this->chown(new \FilesystemIterator($file), $user, true);
 }
-if (is_link($file) && function_exists('lchown')) {
+if (is_link($file) && \function_exists('lchown')) {
 if (true !== @lchown($file, $user)) {
 throw new IOException(sprintf('Failed to chown file "%s".', $file), 0, null, $file);
 }
@@ -249,8 +249,8 @@ foreach ($this->toIterator($files) as $file) {
 if ($recursive && is_dir($file) && !is_link($file)) {
 $this->chgrp(new \FilesystemIterator($file), $group, true);
 }
-if (is_link($file) && function_exists('lchgrp')) {
-if (true !== @lchgrp($file, $group) || (defined('HHVM_VERSION') && !posix_getgrnam($group))) {
+if (is_link($file) && \function_exists('lchgrp')) {
+if (true !== @lchgrp($file, $group) || (\defined('HHVM_VERSION') && !posix_getgrnam($group))) {
 throw new IOException(sprintf('Failed to chgrp file "%s".', $file), 0, null, $file);
 }
 } else {
@@ -303,7 +303,7 @@ private function isReadable($filename)
 {
 $maxPathLength = PHP_MAXPATHLEN - 2;
 
-if (strlen($filename) > $maxPathLength) {
+if (\strlen($filename) > $maxPathLength) {
 throw new IOException(sprintf('Could not check if file is readable because path length exceeds %d characters.', $maxPathLength), 0, null, $filename);
 }
 
@@ -321,7 +321,7 @@ return is_readable($filename);
 
 public function symlink($originDir, $targetDir, $copyOnWindows = false)
 {
-if ('\\' === DIRECTORY_SEPARATOR) {
+if ('\\' === \DIRECTORY_SEPARATOR) {
 $originDir = strtr($originDir, '/', '\\');
 $targetDir = strtr($targetDir, '/', '\\');
 
@@ -332,7 +332,7 @@ return;
 }
 }
 
-$this->mkdir(dirname($targetDir));
+$this->mkdir(\dirname($targetDir));
 
 if (is_link($targetDir)) {
 if (readlink($targetDir) === $originDir) {
@@ -343,7 +343,7 @@ $this->remove($targetDir);
 
 if (!self::box('symlink', $originDir, $targetDir)) {
 if (null !== self::$lastError) {
-if ('\\' === DIRECTORY_SEPARATOR && false !== strpos(self::$lastError, 'error code(1314)')) {
+if ('\\' === \DIRECTORY_SEPARATOR && false !== strpos(self::$lastError, 'error code(1314)')) {
 throw new IOException('Unable to create symlink due to error code 1314: \'A required privilege is not held by the client\'. Do you have the required Administrator-rights?', 0, null, $targetDir);
 }
 }
@@ -362,13 +362,13 @@ throw new IOException(sprintf('Failed to create symbolic link from "%s" to "%s".
 public function makePathRelative($endPath, $startPath)
 {
 
- if ('\\' === DIRECTORY_SEPARATOR) {
+ if ('\\' === \DIRECTORY_SEPARATOR) {
 $endPath = str_replace('\\', '/', $endPath);
 $startPath = str_replace('\\', '/', $startPath);
 }
 
 $stripDriveLetter = function ($path) {
-if (strlen($path) > 2 && ':' === $path[1] && '/' === $path[2] && ctype_alpha($path[0])) {
+if (\strlen($path) > 2 && ':' === $path[1] && '/' === $path[2] && ctype_alpha($path[0])) {
 return substr($path, 2);
 }
 
@@ -386,7 +386,7 @@ $normalizePathArray = function ($pathSegments, $absolute) {
 $result = array();
 
 foreach ($pathSegments as $segment) {
-if ('..' === $segment && ($absolute || count($result))) {
+if ('..' === $segment && ($absolute || \count($result))) {
 array_pop($result);
 } elseif ('.' !== $segment) {
 $result[] = $segment;
@@ -406,16 +406,16 @@ while (isset($startPathArr[$index]) && isset($endPathArr[$index]) && $startPathA
 }
 
 
- if (1 === count($startPathArr) && '' === $startPathArr[0]) {
+ if (1 === \count($startPathArr) && '' === $startPathArr[0]) {
 $depth = 0;
 } else {
-$depth = count($startPathArr) - $index;
+$depth = \count($startPathArr) - $index;
 }
 
 
  $traverser = str_repeat('../', $depth);
 
-$endPathRemainder = implode('/', array_slice($endPathArr, $index));
+$endPathRemainder = implode('/', \array_slice($endPathArr, $index));
 
 
  $relativePath = $traverser.('' !== $endPathRemainder ? $endPathRemainder.'/' : '');
@@ -446,7 +446,7 @@ public function mirror($originDir, $targetDir, \Traversable $iterator = null, $o
 {
 $targetDir = rtrim($targetDir, '/\\');
 $originDir = rtrim($originDir, '/\\');
-$originDirLen = strlen($originDir);
+$originDirLen = \strlen($originDir);
 
 
  if ($this->exists($targetDir) && isset($options['delete']) && $options['delete']) {
@@ -455,7 +455,7 @@ if (null === $deleteIterator) {
 $flags = \FilesystemIterator::SKIP_DOTS;
 $deleteIterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($targetDir, $flags), \RecursiveIteratorIterator::CHILD_FIRST);
 }
-$targetDirLen = strlen($targetDir);
+$targetDirLen = \strlen($targetDir);
 foreach ($deleteIterator as $file) {
 $origin = $originDir.substr($file->getPathname(), $targetDirLen);
 if (!$this->exists($origin)) {
@@ -513,7 +513,7 @@ throw new IOException(sprintf('Unable to guess "%s" file type.', $file), 0, null
 public function isAbsolutePath($file)
 {
 return strspn($file, '/\\', 0, 1)
-|| (strlen($file) > 3 && ctype_alpha($file[0])
+|| (\strlen($file) > 3 && ctype_alpha($file[0])
 && ':' === substr($file, 1, 1)
 && strspn($file, '/\\', 2, 1)
 )
@@ -585,7 +585,7 @@ throw new IOException('A temporary file could not be created.');
 
 public function dumpFile($filename, $content, $mode = 0666)
 {
-$dir = dirname($filename);
+$dir = \dirname($filename);
 
 if (!is_dir($dir)) {
 $this->mkdir($dir);
@@ -602,7 +602,7 @@ throw new IOException(sprintf('Failed to write file "%s".', $filename), 0, null,
 }
 
 if (null !== $mode) {
-if (func_num_args() > 2) {
+if (\func_num_args() > 2) {
 @trigger_error('Support for modifying file permissions is deprecated since Symfony 2.3.12 and will be removed in 3.0.', E_USER_DEPRECATED);
 }
 
@@ -622,7 +622,7 @@ $this->rename($tmpFile, $filename, true);
 private function toIterator($files)
 {
 if (!$files instanceof \Traversable) {
-$files = new \ArrayObject(is_array($files) ? $files : array($files));
+$files = new \ArrayObject(\is_array($files) ? $files : array($files));
 }
 
 return $files;
@@ -639,7 +639,7 @@ private function getSchemeAndHierarchy($filename)
 {
 $components = explode('://', $filename, 2);
 
-return 2 === count($components) ? array($components[0], $components[1]) : array(null, $components[0]);
+return 2 === \count($components) ? array($components[0], $components[1]) : array(null, $components[0]);
 }
 
 private static function box($func)

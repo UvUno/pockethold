@@ -22,7 +22,5 @@ interface InputAwareInterface
 
 
 
-
-
 public function setInput(InputInterface $input);
 }

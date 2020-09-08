@@ -14,8 +14,8 @@ namespace Symfony\Component\Console\Logger;
 use Psr\Log\AbstractLogger;
 use Psr\Log\InvalidArgumentException;
 use Psr\Log\LogLevel;
-use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 
 
 
@@ -94,7 +94,7 @@ private function interpolate($message, array $context)
 
  $replace = array();
 foreach ($context as $key => $val) {
-if (!is_array($val) && (!is_object($val) || method_exists($val, '__toString'))) {
+if (!\is_array($val) && (!\is_object($val) || method_exists($val, '__toString'))) {
 $replace[sprintf('{%s}', $key)] = $val;
 }
 }

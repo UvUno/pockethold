@@ -70,6 +70,7 @@ $source = $this->doTree('.', $source);
 if (!is_array($source)) {
 return;
 }
+chdir($currentDirectory);
 chdir($this->update);
 $destination = $this->doTree('.', $destination);
 if (!is_array($destination)) {

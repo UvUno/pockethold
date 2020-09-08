@@ -42,6 +42,11 @@ private $devMode;
 
 
 
+private $originatingEvent;
+
+
+
+
 
 
 
@@ -55,6 +60,7 @@ parent::__construct($name, $args, $flags);
 $this->composer = $composer;
 $this->io = $io;
 $this->devMode = $devMode;
+$this->originatingEvent = null;
 }
 
 
@@ -85,5 +91,43 @@ return $this->io;
 public function isDevMode()
 {
 return $this->devMode;
+}
+
+
+
+
+
+
+public function getOriginatingEvent()
+{
+return $this->originatingEvent;
+}
+
+
+
+
+
+
+
+public function setOriginatingEvent(BaseEvent $event)
+{
+$this->originatingEvent = $this->calculateOriginatingEvent($event);
+
+return $this;
+}
+
+
+
+
+
+
+
+private function calculateOriginatingEvent(BaseEvent $event)
+{
+if ($event instanceof Event && $event->getOriginatingEvent()) {
+return $this->calculateOriginatingEvent($event->getOriginatingEvent());
+}
+
+return $event;
 }
 }

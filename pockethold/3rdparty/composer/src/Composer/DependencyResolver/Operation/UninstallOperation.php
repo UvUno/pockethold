@@ -51,7 +51,7 @@ return $this->package;
 
 
 
-public function getJobType()
+public function getOperationType()
 {
 return 'uninstall';
 }
@@ -59,8 +59,21 @@ return 'uninstall';
 
 
 
+public function show($lock)
+{
+return self::format($this->package, $lock);
+}
+
+public static function format(PackageInterface $package, $lock = false)
+{
+return 'Removing <info>'.$package->getPrettyName().'</info> (<comment>'.$package->getFullPrettyVersion().'</comment>)';
+}
+
+
+
+
 public function __toString()
 {
-return 'Uninstalling '.$this->package->getPrettyName().' ('.$this->formatVersion($this->package).')';
+return $this->show(false);
 }
 }

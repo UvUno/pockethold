@@ -42,9 +42,4 @@ public function getReason()
 {
 return $this->reason;
 }
-
-protected function formatVersion(PackageInterface $package)
-{
-return $package->getFullPrettyVersion();
-}
 }

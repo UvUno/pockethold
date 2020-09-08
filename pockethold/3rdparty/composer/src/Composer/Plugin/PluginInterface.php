@@ -27,7 +27,12 @@ interface PluginInterface
 
 
 
-const PLUGIN_API_VERSION = '1.1.0';
+
+
+
+
+
+const PLUGIN_API_VERSION = '2.0.0';
 
 
 
@@ -36,4 +41,26 @@ const PLUGIN_API_VERSION = '1.1.0';
 
 
 public function activate(Composer $composer, IOInterface $io);
+
+
+
+
+
+
+
+
+
+
+
+public function deactivate(Composer $composer, IOInterface $io);
+
+
+
+
+
+
+
+
+
+public function uninstall(Composer $composer, IOInterface $io);
 }

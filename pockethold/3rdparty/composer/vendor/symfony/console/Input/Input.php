@@ -71,7 +71,7 @@ $missingArguments = array_filter(array_keys($definition->getArguments()), functi
 return !array_key_exists($argument, $givenArguments) && $definition->getArgument($argument)->isRequired();
 });
 
-if (count($missingArguments) > 0) {
+if (\count($missingArguments) > 0) {
 throw new RuntimeException(sprintf('Not enough arguments (missing: "%s").', implode(', ', $missingArguments)));
 }
 }

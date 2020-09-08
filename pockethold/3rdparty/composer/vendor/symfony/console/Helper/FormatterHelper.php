@@ -45,7 +45,7 @@ return sprintf('<%s>[%s]</%s> %s', $style, $section, $style, $message);
 
 public function formatBlock($messages, $style, $large = false)
 {
-if (!is_array($messages)) {
+if (!\is_array($messages)) {
 $messages = array($messages);
 }
 

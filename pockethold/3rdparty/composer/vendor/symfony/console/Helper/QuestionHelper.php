@@ -18,8 +18,8 @@ use Symfony\Component\Console\Formatter\OutputFormatterStyle;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Question\Question;
 use Symfony\Component\Console\Question\ChoiceQuestion;
+use Symfony\Component\Console\Question\Question;
 
 
 
@@ -46,13 +46,23 @@ $output = $output->getErrorOutput();
 }
 
 if (!$input->isInteractive()) {
-if ($question instanceof ChoiceQuestion) {
+$default = $question->getDefault();
+
+if (null !== $default && $question instanceof ChoiceQuestion) {
 $choices = $question->getChoices();
 
-return $choices[$question->getDefault()];
+if (!$question->isMultiselect()) {
+return isset($choices[$default]) ? $choices[$default] : $default;
 }
 
-return $question->getDefault();
+$default = explode(',', $default);
+foreach ($default as $k => $v) {
+$v = trim($v);
+$default[$k] = isset($choices[$v]) ? $choices[$v] : $v;
+}
+}
+
+return $default;
 }
 
 if (!$question->getValidator()) {
@@ -79,7 +89,7 @@ return $this->validateAttempts($interviewer, $output, $question);
 
 public function setInputStream($stream)
 {
-if (!is_resource($stream)) {
+if (!\is_resource($stream)) {
 throw new InvalidArgumentException('Input stream must be a valid resource.');
 }
 
@@ -140,10 +150,10 @@ throw new RuntimeException('Aborted');
 $ret = trim($ret);
 }
 } else {
-$ret = trim($this->autocomplete($output, $question, $inputStream, is_array($autocomplete) ? $autocomplete : iterator_to_array($autocomplete, false)));
+$ret = trim($this->autocomplete($output, $question, $inputStream, \is_array($autocomplete) ? $autocomplete : iterator_to_array($autocomplete, false)));
 }
 
-$ret = strlen($ret) > 0 ? $ret : $question->getDefault();
+$ret = \strlen($ret) > 0 ? $ret : $question->getDefault();
 
 if ($normalizer = $question->getNormalizer()) {
 return $normalizer($ret);
@@ -207,7 +217,7 @@ $ret = '';
 $i = 0;
 $ofs = -1;
 $matches = $autocomplete;
-$numMatches = count($matches);
+$numMatches = \count($matches);
 
 $sttyMode = shell_exec('stty -g');
 
@@ -232,7 +242,7 @@ if (0 === $numMatches && 0 !== $i) {
 if (0 === $i) {
 $ofs = -1;
 $matches = $autocomplete;
-$numMatches = count($matches);
+$numMatches = \count($matches);
 } else {
 $numMatches = 0;
 }
@@ -256,13 +266,13 @@ continue;
 $ofs += ('A' === $c[2]) ? -1 : 1;
 $ofs = ($numMatches + $ofs) % $numMatches;
 }
-} elseif (ord($c) < 32) {
+} elseif (\ord($c) < 32) {
 if ("\t" === $c || "\n" === $c) {
 if ($numMatches > 0 && -1 !== $ofs) {
 $ret = $matches[$ofs];
 
  $output->write(substr($ret, $i));
-$i = strlen($ret);
+$i = \strlen($ret);
 }
 
 if ("\n" === $c) {
@@ -321,7 +331,7 @@ return $ret;
 
 private function getHiddenResponse(OutputInterface $output, $inputStream)
 {
-if ('\\' === DIRECTORY_SEPARATOR) {
+if ('\\' === \DIRECTORY_SEPARATOR) {
 $exe = __DIR__.'/../Resources/bin/hiddeninput.exe';
 
 
@@ -391,7 +401,7 @@ $this->writeError($output, $error);
 }
 
 try {
-return call_user_func($question->getValidator(), $interviewer());
+return \call_user_func($question->getValidator(), $interviewer());
 } catch (RuntimeException $e) {
 throw $e;
 } catch (\Exception $error) {

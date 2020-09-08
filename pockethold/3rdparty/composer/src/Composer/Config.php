@@ -16,6 +16,7 @@ use Composer\Config\ConfigSourceInterface;
 use Composer\Downloader\TransportException;
 use Composer\IO\IOInterface;
 use Composer\Util\Platform;
+use Composer\Util\ProcessExecutor;
 
 
 
@@ -61,7 +62,11 @@ public static $defaultConfig = array(
 'archive-format' => 'tar',
 'archive-dir' => '.',
 'htaccess-protect' => true,
+'use-github-api' => true,
+'lock' => true,
+'platform-check' => true,
 
+ 
  
  
  
@@ -130,7 +135,7 @@ public function merge($config)
 
  if (!empty($config['config']) && is_array($config['config'])) {
 foreach ($config['config'] as $key => $val) {
-if (in_array($key, array('bitbucket-oauth', 'github-oauth', 'gitlab-oauth', 'gitlab-token', 'http-basic')) && isset($this->config[$key])) {
+if (in_array($key, array('bitbucket-oauth', 'github-oauth', 'gitlab-oauth', 'gitlab-token', 'http-basic', 'bearer')) && isset($this->config[$key])) {
 $this->config[$key] = array_merge($this->config[$key], $val);
 } elseif ('preferred-install' === $key && isset($this->config[$key])) {
 if (is_array($val) || is_array($this->config[$key])) {
@@ -216,7 +221,6 @@ case 'cache-repo-dir':
 case 'cache-vcs-dir':
 case 'cafile':
 case 'capath':
-case 'htaccess-protect':
 
  $env = 'COMPOSER_' . strtoupper(strtr($key, '-', '_'));
 
@@ -229,6 +233,13 @@ return $val;
 }
 
 return (($flags & self::RELATIVE_PATHS) == self::RELATIVE_PATHS) ? $val : $this->realpath($val);
+
+case 'htaccess-protect':
+$value = $this->getComposerEnv('COMPOSER_HTACCESS_PROTECT');
+if (false === $value) {
+$value = $this->config[$key];
+}
+return $value !== 'false' && (bool) $value;
 
 case 'cache-ttl':
 return (int) $this->config[$key];
@@ -317,10 +328,12 @@ return $protos;
 
 case 'disable-tls':
 return $this->config[$key] !== 'false' && (bool) $this->config[$key];
-
 case 'secure-http':
 return $this->config[$key] !== 'false' && (bool) $this->config[$key];
-
+case 'use-github-api':
+return $this->config[$key] !== 'false' && (bool) $this->config[$key];
+case 'lock':
+return $this->config[$key] !== 'false' && (bool) $this->config[$key];
 default:
 if (!isset($this->config[$key])) {
 return null;
@@ -451,5 +464,21 @@ $io->writeError("<warning>Warning: Accessing $host over $scheme which is an inse
 $this->warnedHosts[$host] = true;
 }
 }
+}
+
+
+
+
+
+
+
+
+
+
+
+public static function disableProcessTimeout()
+{
+
+ ProcessExecutor::setTimeout(0);
 }
 }

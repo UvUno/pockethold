@@ -16,7 +16,9 @@ use Composer\Config;
 use Composer\IO\IOInterface;
 use Composer\Downloader\TransportException;
 use Composer\CaBundle\CaBundle;
-use Psr\Log\LoggerInterface;
+use Composer\Util\HttpDownloader;
+use Composer\Util\Http\Response;
+
 
 
 
@@ -41,6 +43,7 @@ private $disableTls = false;
 private $retryAuthFailure;
 private $lastHeaders;
 private $storeAuth;
+private $authHelper;
 private $degradedMode = false;
 private $redirects;
 private $maxRedirects = 20;
@@ -53,14 +56,15 @@ private $maxRedirects = 20;
 
 
 
-public function __construct(IOInterface $io, Config $config = null, array $options = array(), $disableTls = false)
+
+public function __construct(IOInterface $io, Config $config, array $options = array(), $disableTls = false, AuthHelper $authHelper = null)
 {
 $this->io = $io;
 
 
  
  if ($disableTls === false) {
-$this->options = $this->getTlsDefaults($options);
+$this->options = StreamContextFactory::getTlsDefaults($options, $io);
 } else {
 $this->disableTls = true;
 }
@@ -68,6 +72,7 @@ $this->disableTls = true;
 
  $this->options = array_replace_recursive($this->options, $options);
 $this->config = $config;
+$this->authHelper = isset($authHelper) ? $authHelper : new AuthHelper($io, $config);
 }
 
 
@@ -121,6 +126,11 @@ public function setOptions(array $options)
 $this->options = array_replace_recursive($this->options, $options);
 }
 
+
+
+
+
+
 public function isTlsDisabled()
 {
 return $this->disableTls === true;
@@ -140,28 +150,7 @@ return $this->lastHeaders;
 
 
 
-
-public function findHeaderValue(array $headers, $name)
-{
-$value = null;
-foreach ($headers as $header) {
-if (preg_match('{^'.$name.':\s*(.+?)\s*$}i', $header, $match)) {
-$value = $match[1];
-} elseif (preg_match('{^HTTP/}i', $header)) {
-
- 
- $value = null;
-}
-}
-
-return $value;
-}
-
-
-
-
-
-public function findStatusCode(array $headers)
+public static function findStatusCode(array $headers)
 {
 $value = null;
 foreach ($headers as $header) {
@@ -209,27 +198,6 @@ return $value;
 
 protected function get($originUrl, $fileUrl, $additionalOptions = array(), $fileName = null, $progress = true)
 {
-if (strpos($originUrl, '.github.com') === (strlen($originUrl) - 11)) {
-$originUrl = 'github.com';
-}
-
-
- 
- if (
-$this->config
-&& is_array($this->config->get('gitlab-domains'))
-&& false === strpos($originUrl, '/')
-&& !in_array($originUrl, $this->config->get('gitlab-domains'))
-) {
-foreach ($this->config->get('gitlab-domains') as $gitlabDomain) {
-if (0 === strpos($gitlabDomain, $originUrl)) {
-$originUrl = $gitlabDomain;
-break;
-}
-}
-unset($gitlabDomain);
-}
-
 $this->scheme = parse_url($fileUrl, PHP_URL_SCHEME);
 $this->bytesMax = 0;
 $this->originUrl = $originUrl;
@@ -240,11 +208,6 @@ $this->lastProgress = null;
 $this->retryAuthFailure = true;
 $this->lastHeaders = array();
 $this->redirects = 1; 
-
-
- if (preg_match('{^https?://([^:/]+):([^@/]+)@([^/]+)}i', $fileUrl, $match)) {
-$this->io->setAuthentication($originUrl, rawurldecode($match[1]), rawurldecode($match[2]));
-}
 
 $tempAdditionalOptions = $additionalOptions;
 if (isset($tempAdditionalOptions['retry-auth-failure'])) {
@@ -266,14 +229,6 @@ unset($tempAdditionalOptions);
 
 $origFileUrl = $fileUrl;
 
-if (isset($options['github-token'])) {
-
- if (preg_match('{^https?://([a-z0-9-]+\.)*github\.com/}', $fileUrl)) {
-$fileUrl .= (false === strpos($fileUrl, '?') ? '?' : '&') . 'access_token='.$options['github-token'];
-}
-unset($options['github-token']);
-}
-
 if (isset($options['gitlab-token'])) {
 $fileUrl .= (false === strpos($fileUrl, '?') ? '?' : '&') . 'access_token='.$options['gitlab-token'];
 unset($options['gitlab-token']);
@@ -293,7 +248,7 @@ $ctx = StreamContextFactory::getContext($fileUrl, $options, array('notification'
 
 $actualContextOptions = stream_context_get_options($ctx);
 $usingProxy = !empty($actualContextOptions['http']['proxy']) ? ' using proxy ' . $actualContextOptions['http']['proxy'] : '';
-$this->io->writeError((substr($origFileUrl, 0, 4) === 'http' ? 'Downloading ' : 'Reading ') . $origFileUrl . $usingProxy, true, IOInterface::DEBUG);
+$this->io->writeError((substr($origFileUrl, 0, 4) === 'http' ? 'Downloading ' : 'Reading ') . Url::sanitize($origFileUrl) . $usingProxy, true, IOInterface::DEBUG);
 unset($origFileUrl, $actualContextOptions);
 
 
@@ -313,25 +268,25 @@ if ($errorMessage) {
 $errorMessage .= "\n";
 }
 $errorMessage .= preg_replace('{^file_get_contents\(.*?\): }', '', $msg);
+
+return true;
 });
+$http_response_header = array();
 try {
 $result = $this->getRemoteContents($originUrl, $fileUrl, $ctx, $http_response_header);
 
 if (!empty($http_response_header[0])) {
 $statusCode = $this->findStatusCode($http_response_header);
+if ($statusCode >= 400 && Response::findHeaderValue($http_response_header, 'content-type') === 'application/json') {
+HttpDownloader::outputWarnings($this->io, $originUrl, json_decode($result, true));
+}
+
 if (in_array($statusCode, array(401, 403)) && $this->retryAuthFailure) {
-$warning = null;
-if ($this->findHeaderValue($http_response_header, 'content-type') === 'application/json') {
-$data = json_decode($result, true);
-if (!empty($data['warning'])) {
-$warning = $data['warning'];
-}
-}
-$this->promptAuthAndRetry($statusCode, $this->findStatusMessage($http_response_header), $warning, $http_response_header);
+$this->promptAuthAndRetry($statusCode, $this->findStatusMessage($http_response_header), $http_response_header);
 }
 }
 
-$contentLength = !empty($http_response_header[0]) ? $this->findHeaderValue($http_response_header, 'content-length') : null;
+$contentLength = !empty($http_response_header[0]) ? Response::findHeaderValue($http_response_header, 'content-length') : null;
 if ($contentLength && Platform::strlen($result) < $contentLength) {
 
  $e = new TransportException('Content-Length mismatch, received '.Platform::strlen($result).' bytes out of the expected '.$contentLength);
@@ -364,7 +319,7 @@ $e->setResponse($result);
 }
 $result = false;
 }
-if ($errorMessage && !ini_get('allow_url_fopen')) {
+if ($errorMessage && !filter_var(ini_get('allow_url_fopen'), FILTER_VALIDATE_BOOLEAN)) {
 $errorMessage = 'allow_url_fopen must be enabled in php.ini ('.$errorMessage.')';
 }
 restore_error_handler();
@@ -385,15 +340,18 @@ throw $e;
 
 $statusCode = null;
 $contentType = null;
+$locationHeader = null;
 if (!empty($http_response_header[0])) {
 $statusCode = $this->findStatusCode($http_response_header);
-$contentType = $this->findHeaderValue($http_response_header, 'content-type');
+$contentType = Response::findHeaderValue($http_response_header, 'content-type');
+$locationHeader = Response::findHeaderValue($http_response_header, 'location');
 }
 
 
  if ($originUrl === 'bitbucket.org'
-&& !$this->isPublicBitBucketDownload($fileUrl)
+&& !$this->authHelper->isPublicBitBucketDownload($fileUrl)
 && substr($fileUrl, -4) === '.zip'
+&& (!$locationHeader || substr(parse_url($locationHeader, PHP_URL_PATH), -4) !== '.zip')
 && $contentType && preg_match('{^text/html\b}i', $contentType)
 ) {
 $result = false;
@@ -423,7 +381,7 @@ $result = $this->handleRedirect($http_response_header, $additionalOptions, $resu
 
  if ($statusCode && $statusCode >= 400 && $statusCode <= 599) {
 if (!$this->retry) {
-if ($this->progress && !$this->retry && !$isRedirect) {
+if ($this->progress && !$isRedirect) {
 $this->io->overwriteError("Downloading (<error>failed</error>)", false);
 }
 
@@ -442,7 +400,7 @@ $this->io->overwriteError("Downloading (".($result === false ? '<error>failed</e
 
 
  if ($result && extension_loaded('zlib') && substr($fileUrl, 0, 4) === 'http' && !$hasFollowedRedirect) {
-$contentEncoding = $this->findHeaderValue($http_response_header, 'content-encoding');
+$contentEncoding = Response::findHeaderValue($http_response_header, 'content-encoding');
 $decode = $contentEncoding && 'gzip' === strtolower($contentEncoding);
 
 if ($decode) {
@@ -486,6 +444,8 @@ if ($errorMessage) {
 $errorMessage .= "\n";
 }
 $errorMessage .= preg_replace('{^file_put_contents\(.*?\): }', '', $msg);
+
+return true;
 });
 $result = (bool) file_put_contents($fileName, $result);
 restore_error_handler();
@@ -535,8 +495,7 @@ $this->retry = false;
 $result = $this->get($this->originUrl, $this->fileUrl, $additionalOptions, $this->fileName, $this->progress);
 
 if ($this->storeAuth && $this->config) {
-$authHelper = new AuthHelper($this->io, $this->config);
-$authHelper->storeAuth($this->originUrl, $this->storeAuth);
+$this->authHelper->storeAuth($this->originUrl, $this->storeAuth);
 $this->storeAuth = false;
 }
 
@@ -581,6 +540,8 @@ return $result;
 
 protected function getRemoteContents($originUrl, $fileUrl, $context, array &$responseHeaders = null)
 {
+$result = false;
+
 try {
 $e = null;
 $result = file_get_contents($fileUrl, false, $context);
@@ -639,113 +600,16 @@ break;
 }
 }
 
-protected function promptAuthAndRetry($httpStatus, $reason = null, $warning = null, $headers = array())
+protected function promptAuthAndRetry($httpStatus, $reason = null, $headers = array())
 {
-if ($this->config && in_array($this->originUrl, $this->config->get('github-domains'), true)) {
-$gitHubUtil = new GitHub($this->io, $this->config, null);
-$message = "\n";
+$result = $this->authHelper->promptAuthIfNeeded($this->fileUrl, $this->originUrl, $httpStatus, $reason, $headers);
 
-$rateLimited = $gitHubUtil->isRateLimited($headers);
-if ($rateLimited) {
-$rateLimit = $gitHubUtil->getRateLimit($headers);
-if ($this->io->hasAuthentication($this->originUrl)) {
-$message = 'Review your configured GitHub OAuth token or enter a new one to go over the API rate limit.';
-} else {
-$message = 'Create a GitHub OAuth token to go over the API rate limit.';
-}
+$this->storeAuth = $result['storeAuth'];
+$this->retry = $result['retry'];
 
-$message = sprintf(
-'GitHub API limit (%d calls/hr) is exhausted, could not fetch '.$this->fileUrl.'. '.$message.' You can also wait until %s for the rate limit to reset.',
-$rateLimit['limit'],
-$rateLimit['reset']
-)."\n";
-} else {
-$message .= 'Could not fetch '.$this->fileUrl.', please ';
-if ($this->io->hasAuthentication($this->originUrl)) {
-$message .= 'review your configured GitHub OAuth token or enter a new one to access private repos';
-} else {
-$message .= 'create a GitHub OAuth token to access private repos';
-}
-}
-
-if (!$gitHubUtil->authorizeOAuth($this->originUrl)
-&& (!$this->io->isInteractive() || !$gitHubUtil->authorizeOAuthInteractively($this->originUrl, $message))
-) {
-throw new TransportException('Could not authenticate against '.$this->originUrl, 401);
-}
-} elseif ($this->config && in_array($this->originUrl, $this->config->get('gitlab-domains'), true)) {
-$message = "\n".'Could not fetch '.$this->fileUrl.', enter your ' . $this->originUrl . ' credentials ' .($httpStatus === 401 ? 'to access private repos' : 'to go over the API rate limit');
-$gitLabUtil = new GitLab($this->io, $this->config, null);
-
-if ($this->io->hasAuthentication($this->originUrl) && ($auth = $this->io->getAuthentication($this->originUrl)) && $auth['password'] === 'private-token') {
-throw new TransportException("Invalid credentials for '" . $this->fileUrl . "', aborting.", $httpStatus);
-}
-
-if (!$gitLabUtil->authorizeOAuth($this->originUrl)
-&& (!$this->io->isInteractive() || !$gitLabUtil->authorizeOAuthInteractively($this->scheme, $this->originUrl, $message))
-) {
-throw new TransportException('Could not authenticate against '.$this->originUrl, 401);
-}
-} elseif ($this->config && $this->originUrl === 'bitbucket.org') {
-$askForOAuthToken = true;
-if ($this->io->hasAuthentication($this->originUrl)) {
-$auth = $this->io->getAuthentication($this->originUrl);
-if ($auth['username'] !== 'x-token-auth') {
-$bitbucketUtil = new Bitbucket($this->io, $this->config);
-$accessToken = $bitbucketUtil->requestToken($this->originUrl, $auth['username'], $auth['password']);
-if (!empty($accessToken)) {
-$this->io->setAuthentication($this->originUrl, 'x-token-auth', $accessToken);
-$askForOAuthToken = false;
-}
-} else {
-throw new TransportException('Could not authenticate against ' . $this->originUrl, 401);
-}
-}
-
-if ($askForOAuthToken) {
-$message = "\n".'Could not fetch ' . $this->fileUrl . ', please create a bitbucket OAuth token to ' . (($httpStatus === 401 || $httpStatus === 403) ? 'access private repos' : 'go over the API rate limit');
-$bitBucketUtil = new Bitbucket($this->io, $this->config);
-if (! $bitBucketUtil->authorizeOAuth($this->originUrl)
-&& (! $this->io->isInteractive() || !$bitBucketUtil->authorizeOAuthInteractively($this->originUrl, $message))
-) {
-throw new TransportException('Could not authenticate against ' . $this->originUrl, 401);
-}
-}
-} else {
-
- if ($httpStatus === 404) {
-return;
-}
-
-
- if (!$this->io->isInteractive()) {
-if ($httpStatus === 401) {
-$message = "The '" . $this->fileUrl . "' URL required authentication.\nYou must be using the interactive console to authenticate";
-}
-if ($httpStatus === 403) {
-$message = "The '" . $this->fileUrl . "' URL could not be accessed: " . $reason;
-}
-
-throw new TransportException($message, $httpStatus);
-}
-
- if ($this->io->hasAuthentication($this->originUrl)) {
-throw new TransportException("Invalid credentials for '" . $this->fileUrl . "', aborting.", $httpStatus);
-}
-
-$this->io->overwriteError('');
-if ($warning) {
-$this->io->writeError('    <warning>'.$warning.'</warning>');
-}
-$this->io->writeError('    Authentication required (<info>'.parse_url($this->fileUrl, PHP_URL_HOST).'</info>):');
-$username = $this->io->ask('      Username: ');
-$password = $this->io->askAndHideAnswer('      Password: ');
-$this->io->setAuthentication($this->originUrl, $username, $password);
-$this->storeAuth = $this->config->get('store-auths');
-}
-
-$this->retry = true;
+if ($this->retry) {
 throw new TransportException('RETRY');
+}
 }
 
 protected function getOptionsForUrl($originUrl, $additionalOptions)
@@ -805,27 +669,7 @@ if (!$this->degradedMode) {
 $headers[] = 'Connection: close';
 }
 
-if ($this->io->hasAuthentication($originUrl)) {
-$auth = $this->io->getAuthentication($originUrl);
-if ('github.com' === $originUrl && 'x-oauth-basic' === $auth['password']) {
-$options['github-token'] = $auth['username'];
-} elseif ($this->config && in_array($originUrl, $this->config->get('gitlab-domains'), true)) {
-if ($auth['password'] === 'oauth2') {
-$headers[] = 'Authorization: Bearer '.$auth['username'];
-} elseif ($auth['password'] === 'private-token') {
-$headers[] = 'PRIVATE-TOKEN: '.$auth['username'];
-}
-} elseif ('bitbucket.org' === $originUrl
-&& $this->fileUrl !== Bitbucket::OAUTH2_ACCESS_TOKEN_URL && 'x-token-auth' === $auth['username']
-) {
-if (!$this->isPublicBitBucketDownload($this->fileUrl)) {
-$headers[] = 'Authorization: Bearer ' . $auth['password'];
-}
-} else {
-$authStr = base64_encode($auth['username'] . ':' . $auth['password']);
-$headers[] = 'Authorization: Basic '.$authStr;
-}
-}
+$headers = $this->authHelper->addAuthenticationHeader($headers, $originUrl, $this->fileUrl);
 
 $options['http']['follow_location'] = 0;
 
@@ -841,7 +685,7 @@ return $options;
 
 private function handleRedirect(array $http_response_header, array $additionalOptions, $result)
 {
-if ($locationHeader = $this->findHeaderValue($http_response_header, 'location')) {
+if ($locationHeader = Response::findHeaderValue($http_response_header, 'location')) {
 if (parse_url($locationHeader, PHP_URL_SCHEME)) {
 
  $targetUrl = $locationHeader;
@@ -865,7 +709,7 @@ if (!empty($targetUrl)) {
 $this->redirects++;
 
 $this->io->writeError('', true, IOInterface::DEBUG);
-$this->io->writeError(sprintf('Following redirect (%u) %s', $this->redirects, $targetUrl), true, IOInterface::DEBUG);
+$this->io->writeError(sprintf('Following redirect (%u) %s', $this->redirects, Url::sanitize($targetUrl)), true, IOInterface::DEBUG);
 
 $additionalOptions['redirects'] = $this->redirects;
 
@@ -881,111 +725,6 @@ throw $e;
 }
 
 return false;
-}
-
-
-
-
-
-
-private function getTlsDefaults(array $options)
-{
-$ciphers = implode(':', array(
-'ECDHE-RSA-AES128-GCM-SHA256',
-'ECDHE-ECDSA-AES128-GCM-SHA256',
-'ECDHE-RSA-AES256-GCM-SHA384',
-'ECDHE-ECDSA-AES256-GCM-SHA384',
-'DHE-RSA-AES128-GCM-SHA256',
-'DHE-DSS-AES128-GCM-SHA256',
-'kEDH+AESGCM',
-'ECDHE-RSA-AES128-SHA256',
-'ECDHE-ECDSA-AES128-SHA256',
-'ECDHE-RSA-AES128-SHA',
-'ECDHE-ECDSA-AES128-SHA',
-'ECDHE-RSA-AES256-SHA384',
-'ECDHE-ECDSA-AES256-SHA384',
-'ECDHE-RSA-AES256-SHA',
-'ECDHE-ECDSA-AES256-SHA',
-'DHE-RSA-AES128-SHA256',
-'DHE-RSA-AES128-SHA',
-'DHE-DSS-AES128-SHA256',
-'DHE-RSA-AES256-SHA256',
-'DHE-DSS-AES256-SHA',
-'DHE-RSA-AES256-SHA',
-'AES128-GCM-SHA256',
-'AES256-GCM-SHA384',
-'AES128-SHA256',
-'AES256-SHA256',
-'AES128-SHA',
-'AES256-SHA',
-'AES',
-'CAMELLIA',
-'DES-CBC3-SHA',
-'!aNULL',
-'!eNULL',
-'!EXPORT',
-'!DES',
-'!RC4',
-'!MD5',
-'!PSK',
-'!aECDH',
-'!EDH-DSS-DES-CBC3-SHA',
-'!EDH-RSA-DES-CBC3-SHA',
-'!KRB5-DES-CBC3-SHA',
-));
-
-
-
-
-
-
-
-$defaults = array(
-'ssl' => array(
-'ciphers' => $ciphers,
-'verify_peer' => true,
-'verify_depth' => 7,
-'SNI_enabled' => true,
-'capture_peer_cert' => true,
-),
-);
-
-if (isset($options['ssl'])) {
-$defaults['ssl'] = array_replace_recursive($defaults['ssl'], $options['ssl']);
-}
-
-$caBundleLogger = $this->io instanceof LoggerInterface ? $this->io : null;
-
-
-
-
-
-if (!isset($defaults['ssl']['cafile']) && !isset($defaults['ssl']['capath'])) {
-$result = CaBundle::getSystemCaRootBundlePath($caBundleLogger);
-
-if (is_dir($result)) {
-$defaults['ssl']['capath'] = $result;
-} else {
-$defaults['ssl']['cafile'] = $result;
-}
-}
-
-if (isset($defaults['ssl']['cafile']) && (!is_readable($defaults['ssl']['cafile']) || !CaBundle::validateCaFile($defaults['ssl']['cafile'], $caBundleLogger))) {
-throw new TransportException('The configured cafile was not valid or could not be read.');
-}
-
-if (isset($defaults['ssl']['capath']) && (!is_dir($defaults['ssl']['capath']) || !is_readable($defaults['ssl']['capath']))) {
-throw new TransportException('The configured capath was not valid or could not be read.');
-}
-
-
-
-
-if (PHP_VERSION_ID >= 50413) {
-$defaults['ssl']['disable_compression'] = true;
-}
-
-return $defaults;
 }
 
 
@@ -1056,30 +795,5 @@ $defaultPort = $defaultPorts[$scheme];
 $port = parse_url($url, PHP_URL_PORT) ?: $defaultPort;
 
 return parse_url($url, PHP_URL_HOST).':'.$port;
-}
-
-
-
-
-
-
-
-
-private function isPublicBitBucketDownload($urlToBitBucketFile)
-{
-$domain = parse_url($urlToBitBucketFile, PHP_URL_HOST);
-if (strpos($domain, 'bitbucket.org') === false) {
-
- 
- return true;
-}
-
-$path = parse_url($urlToBitBucketFile, PHP_URL_PATH);
-
-
- 
- $pathParts = explode('/', $path);
-
-return count($pathParts) >= 4 && $pathParts[3] == 'downloads';
 }
 }

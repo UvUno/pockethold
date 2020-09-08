@@ -89,14 +89,16 @@ return $this->prettyName;
 
 
 
-public function getNames()
+public function getNames($provides = true)
 {
 $names = array(
 $this->getName() => true,
 );
 
+if ($provides) {
 foreach ($this->getProvides() as $link) {
 $names[$link->getTarget()] = true;
+}
 }
 
 foreach ($this->getReplaces() as $link) {
@@ -210,18 +212,32 @@ return $this->getPrettyName().' '.$this->getPrettyVersion();
 
 
 
-public function getFullPrettyVersion($truncate = true)
+public function getFullPrettyVersion($truncate = true, $displayMode = PackageInterface::DISPLAY_SOURCE_REF_IF_DEV)
 {
-if (!$this->isDev() || !in_array($this->getSourceType(), array('hg', 'git'))) {
+if ($displayMode === PackageInterface::DISPLAY_SOURCE_REF_IF_DEV &&
+(!$this->isDev() || !\in_array($this->getSourceType(), array('hg', 'git')))
+) {
 return $this->getPrettyVersion();
 }
 
-
- if ($truncate && strlen($this->getSourceReference()) === 40) {
-return $this->getPrettyVersion() . ' ' . substr($this->getSourceReference(), 0, 7);
+switch ($displayMode) {
+case PackageInterface::DISPLAY_SOURCE_REF_IF_DEV:
+case PackageInterface::DISPLAY_SOURCE_REF:
+$reference = $this->getSourceReference();
+break;
+case PackageInterface::DISPLAY_DIST_REF:
+$reference = $this->getDistReference();
+break;
+default:
+throw new \UnexpectedValueException('Display mode '.$displayMode.' is not supported');
 }
 
-return $this->getPrettyVersion() . ' ' . $this->getSourceReference();
+
+ if ($truncate && \strlen($reference) === 40 && $this->getSourceType() !== 'svn') {
+return $this->getPrettyVersion() . ' ' . substr($reference, 0, 7);
+}
+
+return $this->getPrettyVersion() . ' ' . $reference;
 }
 
 public function getStabilityPriority()
@@ -233,5 +249,19 @@ public function __clone()
 {
 $this->repository = null;
 $this->id = -1;
+}
+
+
+
+
+
+
+
+
+public static function packageNameToRegexp($allowPattern, $wrap = '{^%s$}i')
+{
+$cleanedAllowPattern = str_replace('\\*', '.*', preg_quote($allowPattern));
+
+return sprintf($wrap, $cleanedAllowPattern);
 }
 }

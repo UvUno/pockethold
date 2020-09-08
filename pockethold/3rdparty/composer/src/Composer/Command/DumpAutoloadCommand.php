@@ -35,10 +35,14 @@ new InputOption('optimize', 'o', InputOption::VALUE_NONE, 'Optimizes PSR0 and PS
 new InputOption('classmap-authoritative', 'a', InputOption::VALUE_NONE, 'Autoload classes from the classmap only. Implicitly enables `--optimize`.'),
 new InputOption('apcu', null, InputOption::VALUE_NONE, 'Use APCu to cache found/not-found classes.'),
 new InputOption('no-dev', null, InputOption::VALUE_NONE, 'Disables autoload-dev rules.'),
+new InputOption('ignore-platform-req', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Ignore a specific platform requirement (php & ext- packages).'),
+new InputOption('ignore-platform-reqs', null, InputOption::VALUE_NONE, 'Ignore all platform requirements (php & ext- packages).'),
 ))
 ->setHelp(
 <<<EOT
 <info>php composer.phar dump-autoload</info>
+
+Read more at https://getcomposer.org/doc/03-cli.md#dump-autoload-dumpautoload-
 EOT
 )
 ;
@@ -61,18 +65,31 @@ $authoritative = $input->getOption('classmap-authoritative') || $config->get('cl
 $apcu = $input->getOption('apcu') || $config->get('apcu-autoloader');
 
 if ($authoritative) {
-$this->getIO()->writeError('<info>Generating optimized autoload files (authoritative)</info>');
+$this->getIO()->write('<info>Generating optimized autoload files (authoritative)</info>');
 } elseif ($optimize) {
-$this->getIO()->writeError('<info>Generating optimized autoload files</info>');
+$this->getIO()->write('<info>Generating optimized autoload files</info>');
 } else {
-$this->getIO()->writeError('<info>Generating autoload files</info>');
+$this->getIO()->write('<info>Generating autoload files</info>');
 }
+
+$ignorePlatformReqs = $input->getOption('ignore-platform-reqs') ?: ($input->getOption('ignore-platform-req') ?: false);
 
 $generator = $composer->getAutoloadGenerator();
 $generator->setDevMode(!$input->getOption('no-dev'));
 $generator->setClassMapAuthoritative($authoritative);
 $generator->setApcu($apcu);
 $generator->setRunScripts(!$input->getOption('no-scripts'));
-$generator->dump($config, $localRepo, $package, $installationManager, 'composer', $optimize);
+$generator->setIgnorePlatformRequirements($ignorePlatformReqs);
+$numberOfClasses = $generator->dump($config, $localRepo, $package, $installationManager, 'composer', $optimize);
+
+if ($authoritative) {
+$this->getIO()->write('<info>Generated optimized autoload files (authoritative) containing '. $numberOfClasses .' classes</info>');
+} elseif ($optimize) {
+$this->getIO()->write('<info>Generated optimized autoload files containing '. $numberOfClasses .' classes</info>');
+} else {
+$this->getIO()->write('<info>Generated autoload files</info>');
+}
+
+return 0;
 }
 }

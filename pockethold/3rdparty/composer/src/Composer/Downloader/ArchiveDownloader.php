@@ -15,6 +15,9 @@ namespace Composer\Downloader;
 use Composer\Package\PackageInterface;
 use Symfony\Component\Finder\Finder;
 use Composer\IO\IOInterface;
+use Composer\Exception\IrrecoverableDownloadException;
+use React\Promise\PromiseInterface;
+use Composer\DependencyResolver\Operation\InstallOperation;
 
 
 
@@ -25,86 +28,64 @@ use Composer\IO\IOInterface;
 
 abstract class ArchiveDownloader extends FileDownloader
 {
-
-
-
-
-
-public function download(PackageInterface $package, $path, $output = true)
+public function download(PackageInterface $package, $path, PackageInterface $prevPackage = null, $output = true)
 {
-$temporaryDir = $this->config->get('vendor-dir').'/composer/'.substr(md5(uniqid('', true)), 0, 8);
-$retries = 3;
-while ($retries--) {
-$fileName = parent::download($package, $path, $output);
+return parent::download($package, $path, $prevPackage, $output);
+}
 
+
+
+
+
+
+public function install(PackageInterface $package, $path, $output = true)
+{
 if ($output) {
-$this->io->writeError(' Extracting archive', false, IOInterface::VERBOSE);
-}
-
-try {
-$this->filesystem->ensureDirectoryExists($temporaryDir);
-try {
-$this->extract($fileName, $temporaryDir);
-} catch (\Exception $e) {
-
- parent::clearLastCacheWrite($package);
-throw $e;
-}
-
-$this->filesystem->unlink($fileName);
-
-$contentDir = $this->getFolderContent($temporaryDir);
-
-
- if (1 === count($contentDir) && is_dir(reset($contentDir))) {
-$contentDir = $this->getFolderContent((string) reset($contentDir));
-}
-
-
- foreach ($contentDir as $file) {
-$file = (string) $file;
-$this->filesystem->rename($file, $path . '/' . basename($file));
-}
-
-$this->filesystem->removeDirectory($temporaryDir);
-if ($this->filesystem->isDirEmpty($this->config->get('vendor-dir').'/composer/')) {
-$this->filesystem->removeDirectory($this->config->get('vendor-dir').'/composer/');
-}
-if ($this->filesystem->isDirEmpty($this->config->get('vendor-dir'))) {
-$this->filesystem->removeDirectory($this->config->get('vendor-dir'));
-}
-} catch (\Exception $e) {
-
- $this->filesystem->removeDirectory($path);
-$this->filesystem->removeDirectory($temporaryDir);
-
-
- if ($retries && $e instanceof \UnexpectedValueException && class_exists('ZipArchive') && $e->getCode() === \ZipArchive::ER_NOZIP) {
-$this->io->writeError('');
-if ($this->io->isDebug()) {
-$this->io->writeError('    Invalid zip file ('.$e->getMessage().'), retrying...');
+$this->io->writeError("  - " . InstallOperation::format($package).": Extracting archive");
 } else {
-$this->io->writeError('    Invalid zip file, retrying...');
-}
-usleep(500000);
-continue;
+$this->io->writeError('Extracting archive', false);
 }
 
+$this->filesystem->emptyDirectory($path);
+
+do {
+$temporaryDir = $this->config->get('vendor-dir').'/composer/'.substr(md5(uniqid('', true)), 0, 8);
+} while (is_dir($temporaryDir));
+
+$this->addCleanupPath($package, $temporaryDir);
+$this->addCleanupPath($package, $path);
+
+$this->filesystem->ensureDirectoryExists($temporaryDir);
+$fileName = $this->getFileName($package, $path);
+
+$filesystem = $this->filesystem;
+$self = $this;
+
+$cleanup = function () use ($path, $filesystem, $temporaryDir, $package, $self) {
+
+ $self->clearLastCacheWrite($package);
+
+
+ $filesystem->removeDirectory($path);
+$filesystem->removeDirectory($temporaryDir);
+$self->removeCleanupPath($package, $temporaryDir);
+$self->removeCleanupPath($package, $path);
+};
+
+$promise = null;
+try {
+$promise = $this->extract($package, $fileName, $temporaryDir);
+} catch (\Exception $e) {
+$cleanup();
 throw $e;
 }
 
-break;
-}
-}
-
-
-
-
-protected function getFileName(PackageInterface $package, $path)
-{
-return rtrim($path.'/'.md5($path.spl_object_hash($package)).'.'.pathinfo(parse_url($package->getDistUrl(), PHP_URL_PATH), PATHINFO_EXTENSION), '.');
+if (!$promise instanceof PromiseInterface) {
+$promise = \React\Promise\resolve();
 }
 
+return $promise->then(function () use ($self, $package, $filesystem, $fileName, $temporaryDir, $path) {
+$filesystem->unlink($fileName);
 
 
 
@@ -112,17 +93,7 @@ return rtrim($path.'/'.md5($path.spl_object_hash($package)).'.'.pathinfo(parse_u
 
 
 
-
-abstract protected function extract($file, $path);
-
-
-
-
-
-
-
-private function getFolderContent($dir)
-{
+$getFolderContent = function ($dir) {
 $finder = Finder::create()
 ->ignoreVCS(false)
 ->ignoreDotFiles(false)
@@ -131,5 +102,55 @@ $finder = Finder::create()
 ->in($dir);
 
 return iterator_to_array($finder);
+};
+
+$renameAsOne = false;
+if (!file_exists($path) || ($filesystem->isDirEmpty($path) && $filesystem->removeDirectory($path))) {
+$renameAsOne = true;
 }
+
+$contentDir = $getFolderContent($temporaryDir);
+$singleDirAtTopLevel = 1 === count($contentDir) && is_dir(reset($contentDir));
+
+if ($renameAsOne) {
+
+ if ($singleDirAtTopLevel) {
+$extractedDir = (string) reset($contentDir);
+} else {
+$extractedDir = $temporaryDir;
+}
+$filesystem->rename($extractedDir, $path);
+} else {
+
+ if ($singleDirAtTopLevel) {
+$contentDir = $getFolderContent((string) reset($contentDir));
+}
+
+
+ foreach ($contentDir as $file) {
+$file = (string) $file;
+$filesystem->rename($file, $path . '/' . basename($file));
+}
+}
+
+$filesystem->removeDirectory($temporaryDir);
+$self->removeCleanupPath($package, $temporaryDir);
+$self->removeCleanupPath($package, $path);
+}, function ($e) use ($cleanup) {
+$cleanup();
+
+throw $e;
+});
+}
+
+
+
+
+
+
+
+
+
+
+abstract protected function extract(PackageInterface $package, $file, $path);
 }

@@ -1,6 +1,6 @@
 <?php
 
-if (PHP_SAPI !== 'cli') {
+if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
     echo 'Warning: Composer should be invoked via the CLI version of PHP, not the '.PHP_SAPI.' SAPI'.PHP_EOL;
 }
 
@@ -12,10 +12,15 @@ use Composer\XdebugHandler\XdebugHandler;
 
 error_reporting(-1);
 
-// Restart without xdebug
+// Restart without Xdebug
 $xdebug = new XdebugHandler('Composer', '--ansi');
 $xdebug->check();
 unset($xdebug);
+
+if (defined('HHVM_VERSION') && version_compare(HHVM_VERSION, '4.0', '>=')) {
+    echo 'HHVM 4.0 has dropped support for Composer, please use PHP instead. Aborting.'.PHP_EOL;
+    exit(1);
+}
 
 if (function_exists('ini_set')) {
     @ini_set('display_errors', 1);

@@ -51,7 +51,7 @@ return $this->package;
 
 
 
-public function getJobType()
+public function getOperationType()
 {
 return 'install';
 }
@@ -59,8 +59,21 @@ return 'install';
 
 
 
+public function show($lock)
+{
+return self::format($this->package, $lock);
+}
+
+public static function format(PackageInterface $package, $lock = false)
+{
+return ($lock ? 'Locking ' : 'Installing ').'<info>'.$package->getPrettyName().'</info> (<comment>'.$package->getFullPrettyVersion().'</comment>)';
+}
+
+
+
+
 public function __toString()
 {
-return 'Installing '.$this->package->getPrettyName().' ('.$this->formatVersion($this->package).')';
+return $this->show(false);
 }
 }

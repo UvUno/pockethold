@@ -173,7 +173,7 @@ $errStr = null;
 
 while (true) {
 
- $state = $this->stack[count($this->stack)-1];
+ $state = $this->stack[\count($this->stack)-1];
 
 
  if (isset($this->defaultActions[$state])) {
@@ -198,13 +198,13 @@ $expected[] = "'" . $this->terminals_[$p] . "'";
 }
 
 $message = null;
-if (in_array("'STRING'", $expected) && in_array(substr($this->lexer->match, 0, 1), array('"', "'"))) {
+if (\in_array("'STRING'", $expected) && \in_array(substr($this->lexer->match, 0, 1), array('"', "'"))) {
 $message = "Invalid string";
 if ("'" === substr($this->lexer->match, 0, 1)) {
 $message .= ", it appears you used single quotes instead of double quotes";
-} elseif (preg_match('{".+?(\\\\[^"bfnrt/\\\\u])}', $this->lexer->getUpcomingInput(), $match)) {
+} elseif (preg_match('{".+?(\\\\[^"bfnrt/\\\\u](...)?)}', $this->lexer->getFullUpcomingInput(), $match)) {
 $message .= ", it appears you have an unescaped backslash at: ".$match[1];
-} elseif (preg_match('{"(?:[^"]+|\\\\")*$}m', $this->lexer->getUpcomingInput())) {
+} elseif (preg_match('{"(?:[^"]+|\\\\")*$}m', $this->lexer->getFullUpcomingInput())) {
 $message .= ", it appears you forgot to terminate a string, or attempted to write a multiline string which is invalid";
 }
 }
@@ -214,7 +214,7 @@ $errStr .= $this->lexer->showPosition() . "\n";
 if ($message) {
 $errStr .= $message;
 } else {
-$errStr .= (count($expected) > 1) ? "Expected one of: " : "Expected: ";
+$errStr .= (\count($expected) > 1) ? "Expected one of: " : "Expected: ";
 $errStr .= implode(', ', $expected);
 }
 
@@ -248,25 +248,25 @@ $symbol = $this->lex();
 
  while (true) {
 
- if (array_key_exists($TERROR, $this->table[$state])) {
+ if (\array_key_exists($TERROR, $this->table[$state])) {
 break;
 }
 if ($state == 0) {
 throw new ParsingException($errStr ?: 'Parsing halted.');
 }
 $this->popStack(1);
-$state = $this->stack[count($this->stack)-1];
+$state = $this->stack[\count($this->stack)-1];
 }
 
 $preErrorSymbol = $symbol; 
  $symbol = $TERROR; 
- $state = $this->stack[count($this->stack)-1];
+ $state = $this->stack[\count($this->stack)-1];
 $action = isset($this->table[$state][$TERROR]) ? $this->table[$state][$TERROR] : false;
 $recovering = 3; 
  }
 
 
- if (is_array($action[0]) && count($action) > 1) {
+ if (\is_array($action[0]) && \count($action) > 1) {
 throw new ParsingException('Parse Error: multiple actions possible at state: ' . $state . ', token: ' . $symbol);
 }
 
@@ -295,13 +295,13 @@ case 2:
  $len = $this->productions_[$action[1]][1];
 
 
- $yyval->token = $this->vstack[count($this->vstack) - $len]; 
+ $yyval->token = $this->vstack[\count($this->vstack) - $len]; 
  
  $yyval->store = array( 
- 'first_line' => $this->lstack[count($this->lstack) - ($len ?: 1)]['first_line'],
-'last_line' => $this->lstack[count($this->lstack) - 1]['last_line'],
-'first_column' => $this->lstack[count($this->lstack) - ($len ?: 1)]['first_column'],
-'last_column' => $this->lstack[count($this->lstack) - 1]['last_column'],
+ 'first_line' => $this->lstack[\count($this->lstack) - ($len ?: 1)]['first_line'],
+'last_line' => $this->lstack[\count($this->lstack) - 1]['last_line'],
+'first_column' => $this->lstack[\count($this->lstack) - ($len ?: 1)]['first_column'],
+'last_column' => $this->lstack[\count($this->lstack) - 1]['last_column'],
 );
 $r = $this->performAction($yyval, $yytext, $yyleng, $yylineno, $action[1], $this->vstack, $this->lstack);
 
@@ -316,7 +316,7 @@ $this->popStack($len);
 $this->stack[] = $this->productions_[$action[1]][0]; 
  $this->vstack[] = $yyval->token;
 $this->lstack[] = $yyval->store;
-$newState = $this->table[$this->stack[count($this->stack)-2]][$this->stack[count($this->stack)-1]];
+$newState = $this->table[$this->stack[\count($this->stack)-2]][$this->stack[\count($this->stack)-1]];
 $this->stack[] = $newState;
 break;
 
@@ -340,7 +340,7 @@ throw new ParsingException($str, $hash);
  private function performAction(stdClass $yyval, $yytext, $yyleng, $yylineno, $yystate, &$tokens)
 {
 
- $len = count($tokens) - 1;
+ $len = \count($tokens) - 1;
 switch ($yystate) {
 case 1:
 $yytext = preg_replace_callback('{(?:\\\\["bfnrt/\\\\]|\\\\u[a-fA-F0-9]{4})}', array($this, 'stringInterpolation'), $yytext);
@@ -348,9 +348,9 @@ $yyval->token = $yytext;
 break;
 case 2:
 if (strpos($yytext, 'e') !== false || strpos($yytext, 'E') !== false) {
-$yyval->token = floatval($yytext);
+$yyval->token = \floatval($yytext);
 } else {
-$yyval->token = strpos($yytext, '.') === false ? intval($yytext) : floatval($yytext);
+$yyval->token = strpos($yytext, '.') === false ? \intval($yytext) : \floatval($yytext);
 }
 break;
 case 3:
@@ -456,9 +456,9 @@ return '\\';
 case '\"':
 return '"';
 case '\b':
-return chr(8);
+return \chr(8);
 case '\f':
-return chr(12);
+return \chr(12);
 case '\n':
 return "\n";
 case '\r':
@@ -468,15 +468,15 @@ return "\t";
 case '\/':
 return "/";
 default:
-return html_entity_decode('&#x'.ltrim(substr($match[0], 2), '0').';', 0, 'UTF-8');
+return html_entity_decode('&#x'.ltrim(substr($match[0], 2), '0').';', ENT_QUOTES, 'UTF-8');
 }
 }
 
 private function popStack($n)
 {
-$this->stack = array_slice($this->stack, 0, - (2 * $n));
-$this->vstack = array_slice($this->vstack, 0, - $n);
-$this->lstack = array_slice($this->lstack, 0, - $n);
+$this->stack = \array_slice($this->stack, 0, - (2 * $n));
+$this->vstack = \array_slice($this->vstack, 0, - $n);
+$this->lstack = \array_slice($this->lstack, 0, - $n);
 }
 
 private function lex()

@@ -42,10 +42,10 @@ error_reporting($errorReportingLevel);
 error_reporting(-1);
 }
 
-if (!\in_array(PHP_SAPI, array('cli', 'phpdbg'), true)) {
+if (!\in_array(\PHP_SAPI, array('cli', 'phpdbg'), true)) {
 ini_set('display_errors', 0);
 ExceptionHandler::register();
-} elseif ($displayErrors && (!ini_get('log_errors') || ini_get('error_log'))) {
+} elseif ($displayErrors && (!filter_var(ini_get('log_errors'), FILTER_VALIDATE_BOOLEAN) || ini_get('error_log'))) {
 
  ini_set('display_errors', 1);
 }

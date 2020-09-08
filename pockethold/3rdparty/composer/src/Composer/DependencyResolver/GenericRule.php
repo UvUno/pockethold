@@ -27,10 +27,9 @@ protected $literals;
 
 
 
-
-public function __construct(array $literals, $reason, $reasonData, $job = null)
+public function __construct(array $literals, $reason, $reasonData)
 {
-parent::__construct($reason, $reasonData, $job);
+parent::__construct($reason, $reasonData);
 
 
  sort($literals);
@@ -65,7 +64,7 @@ return $this->literals === $rule->getLiterals();
 
 public function isAssertion()
 {
-return 1 === count($this->literals);
+return 1 === \count($this->literals);
 }
 
 

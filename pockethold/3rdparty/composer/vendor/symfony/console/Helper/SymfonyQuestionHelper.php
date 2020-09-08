@@ -12,13 +12,13 @@
 namespace Symfony\Component\Console\Helper;
 
 use Symfony\Component\Console\Exception\LogicException;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Question\ChoiceQuestion;
 use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Question\Question;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\Console\Formatter\OutputFormatter;
 
 
 
@@ -38,7 +38,7 @@ if (null !== $validator) {
 $value = $validator($value);
 } else {
 
- if (!is_array($value) && !is_bool($value) && 0 === strlen($value)) {
+ if (!\is_array($value) && !\is_bool($value) && 0 === \strlen($value)) {
 throw new LogicException('A value is required.');
 }
 }
@@ -82,7 +82,7 @@ break;
 
 case $question instanceof ChoiceQuestion:
 $choices = $question->getChoices();
-$text = sprintf(' <info>%s</info> [<comment>%s</comment>]:', $text, OutputFormatter::escape($choices[$default]));
+$text = sprintf(' <info>%s</info> [<comment>%s</comment>]:', $text, OutputFormatter::escape(isset($choices[$default]) ? $choices[$default] : $default));
 
 break;
 

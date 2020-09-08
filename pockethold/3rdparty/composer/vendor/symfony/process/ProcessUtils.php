@@ -42,7 +42,7 @@ public static function escapeArgument($argument)
  
  
  
- if ('\\' === DIRECTORY_SEPARATOR) {
+ if ('\\' === \DIRECTORY_SEPARATOR) {
 if ('' === $argument) {
 return escapeshellarg($argument);
 }
@@ -89,17 +89,17 @@ return "'".str_replace("'", "'\\''", $argument)."'";
 public static function validateInput($caller, $input)
 {
 if (null !== $input) {
-if (is_resource($input)) {
+if (\is_resource($input)) {
 return $input;
 }
-if (is_string($input)) {
+if (\is_string($input)) {
 return $input;
 }
 if (is_scalar($input)) {
 return (string) $input;
 }
 
- if (is_object($input) && method_exists($input, '__toString')) {
+ if (\is_object($input) && method_exists($input, '__toString')) {
 @trigger_error('Passing an object as an input is deprecated since Symfony 2.5 and will be removed in 3.0.', E_USER_DEPRECATED);
 
 return (string) $input;
@@ -113,6 +113,6 @@ return $input;
 
 private static function isSurroundedBy($arg, $char)
 {
-return 2 < strlen($arg) && $char === $arg[0] && $char === $arg[strlen($arg) - 1];
+return 2 < \strlen($arg) && $char === $arg[0] && $char === $arg[\strlen($arg) - 1];
 }
 }

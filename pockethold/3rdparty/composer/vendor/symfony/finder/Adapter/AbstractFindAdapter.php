@@ -13,13 +13,13 @@ namespace Symfony\Component\Finder\Adapter;
 
 @trigger_error('The '.__NAMESPACE__.'\AbstractFindAdapter class is deprecated since Symfony 2.8 and will be removed in 3.0. Use directly the Finder class instead.', E_USER_DEPRECATED);
 
-use Symfony\Component\Finder\Exception\AccessDeniedException;
-use Symfony\Component\Finder\Iterator;
-use Symfony\Component\Finder\Shell\Shell;
-use Symfony\Component\Finder\Expression\Expression;
-use Symfony\Component\Finder\Shell\Command;
-use Symfony\Component\Finder\Comparator\NumberComparator;
 use Symfony\Component\Finder\Comparator\DateComparator;
+use Symfony\Component\Finder\Comparator\NumberComparator;
+use Symfony\Component\Finder\Exception\AccessDeniedException;
+use Symfony\Component\Finder\Expression\Expression;
+use Symfony\Component\Finder\Iterator;
+use Symfony\Component\Finder\Shell\Command;
+use Symfony\Component\Finder\Shell\Shell;
 
 
 
@@ -77,7 +77,7 @@ $this->buildSizesFiltering($find, $this->sizes);
 $this->buildDatesFiltering($find, $this->dates);
 
 $useGrep = $this->shell->testCommand('grep') && $this->shell->testCommand('xargs');
-$useSort = is_int($this->sort) && $this->shell->testCommand('sort') && $this->shell->testCommand('cut');
+$useSort = \is_int($this->sort) && $this->shell->testCommand('sort') && $this->shell->testCommand('cut');
 
 if ($useGrep && ($this->contains || $this->notContains)) {
 $grep = $command->ins('grep');
@@ -149,7 +149,7 @@ return $command
 
 private function buildNamesFiltering(Command $command, array $names, $not = false)
 {
-if (0 === count($names)) {
+if (0 === \count($names)) {
 return;
 }
 
@@ -197,7 +197,7 @@ $command->cmd(')');
 
 private function buildPathsFiltering(Command $command, $dir, array $paths, $not = false)
 {
-if (0 === count($paths)) {
+if (0 === \count($paths)) {
 return;
 }
 
@@ -214,7 +214,7 @@ $expr = Expression::create($expr->getGlob()->toRegex(false));
 
  if ($expr->isRegex()) {
 $regex = $expr->getRegex();
-$regex->prepend($regex->hasStartFlag() ? preg_quote($dir).DIRECTORY_SEPARATOR : '.*')->setEndJoker(!$regex->hasEndFlag());
+$regex->prepend($regex->hasStartFlag() ? preg_quote($dir).\DIRECTORY_SEPARATOR : '.*')->setEndJoker(!$regex->hasEndFlag());
 } else {
 $expr->prepend('*')->append('*');
 }

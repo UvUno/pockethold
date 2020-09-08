@@ -45,6 +45,18 @@ $zip->addEmptyDir($localname);
 } else {
 $zip->addFile($filepath, $localname);
 }
+
+
+
+
+if (PHP_VERSION_ID >= 50600) {
+$perms = fileperms($filepath);
+
+
+
+
+$zip->setExternalAttributesName($localname, ZipArchive::OPSYS_UNIX, $perms << 16);
+}
 }
 if ($zip->close()) {
 return $target;

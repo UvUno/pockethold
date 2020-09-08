@@ -22,11 +22,17 @@ use Composer\Downloader\TransportException;
 
 class Bitbucket
 {
+
 private $io;
+
 private $config;
+
 private $process;
-private $remoteFilesystem;
+
+private $httpDownloader;
+
 private $token = array();
+
 private $time;
 
 const OAUTH2_ACCESS_TOKEN_URL = 'https://bitbucket.org/site/oauth2/access_token';
@@ -40,12 +46,12 @@ const OAUTH2_ACCESS_TOKEN_URL = 'https://bitbucket.org/site/oauth2/access_token'
 
 
 
-public function __construct(IOInterface $io, Config $config, ProcessExecutor $process = null, RemoteFilesystem $remoteFilesystem = null, $time = null)
+public function __construct(IOInterface $io, Config $config, ProcessExecutor $process = null, HttpDownloader $httpDownloader = null, $time = null)
 {
 $this->io = $io;
 $this->config = $config;
-$this->process = $process ?: new ProcessExecutor;
-$this->remoteFilesystem = $remoteFilesystem ?: Factory::createRemoteFilesystem($this->io, $config);
+$this->process = $process ?: new ProcessExecutor($io);
+$this->httpDownloader = $httpDownloader ?: Factory::createHttpDownloader($this->io, $config);
 $this->time = $time;
 }
 
@@ -90,7 +96,7 @@ return false;
 private function requestAccessToken($originUrl)
 {
 try {
-$json = $this->remoteFilesystem->getContents($originUrl, self::OAUTH2_ACCESS_TOKEN_URL, false, array(
+$response = $this->httpDownloader->get(self::OAUTH2_ACCESS_TOKEN_URL, array(
 'retry-auth-failure' => false,
 'http' => array(
 'method' => 'POST',
@@ -98,7 +104,7 @@ $json = $this->remoteFilesystem->getContents($originUrl, self::OAUTH2_ACCESS_TOK
 ),
 ));
 
-$this->token = json_decode($json, true);
+$this->token = $response->decodeJson();
 } catch (TransportException $e) {
 if ($e->getCode() === 400) {
 $this->io->writeError('<error>Invalid OAuth consumer provided.</error>');

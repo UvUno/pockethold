@@ -23,10 +23,6 @@ class Pockethold {
         {
             mkdir($this->tpath);
         }
-        if ( !file_exists($this->lpath) )
-        {
-            mkdir($this->lpath);
-        }
     }
 
     /**
@@ -76,10 +72,6 @@ class Pockethold {
         return $i;
     }
 
-    /**
-     * rrmdir - Recursively remove directory
-     * @param $dir - Event type
-     */
     function rrmdir($dir)
     {
         if ( is_dir($dir) ) {
@@ -97,7 +89,7 @@ class Pockethold {
     }
 
     /**
-     * rmove - Recursively move files from one directory to another
+     * Recursively move files from one directory to another
      *
      * @param String $src - Source of files being moved
      * @param String $dest - Destination of files being moved
@@ -138,7 +130,6 @@ class Pockethold {
         if ( $ini_get_option_details['memory_limit']['access'] & INI_USER ) {
             ini_set('memory_limit', '1G');
         } else {
-            $this->phlog('Composer:', 'Die: Not enough memory', 'install.log');
             die("Not enough memory!");
         }
 
@@ -192,10 +183,6 @@ class Pockethold {
             } elseif ($request == 'flarum') {
                 echo 'Initiated';
                 $this->phcomposer('create-project flarum/flarum ./pockethold/download --stability=beta --prefer-dist --no-progress -n', 'flarum');
-            } elseif ($request == 'bazaar') {
-                echo 'Initiated';
-                chdir("./pockethold/download");
-                $this->phcomposer('require "flagrow/bazaar:*" --prefer-dist --no-progress -n -o', 'bazaar');
             } elseif ($request == 'cleanup') {
                 echo 'Initiated';
                 $this->cleanup();
@@ -234,12 +221,9 @@ class Pockethold {
      * @return string
      */
     public function composerProgress($file){
-
-        if ( !file_exists($this->lpath . $file) ) {
-          return 'Waiting for Logfile';
-        }
-        $log_file = file_get_contents($this->lpath . $file)
-        return $log_file;
+        $log_file = file_get_contents($this->lpath . $file);
+        $result  = "<pre id='consoleoutput' style='white-space: pre-wrap; text-align:left; height: 300px; max-height: 300px; overflow:auto; color:#fff;'>" . $log_file . "</pre>";
+        return $result;
     }
 
 }

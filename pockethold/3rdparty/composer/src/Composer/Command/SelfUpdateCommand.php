@@ -16,6 +16,7 @@ use Composer\Composer;
 use Composer\Factory;
 use Composer\Config;
 use Composer\Util\Filesystem;
+use Composer\Util\Platform;
 use Composer\SelfUpdate\Keys;
 use Composer\SelfUpdate\Versions;
 use Composer\IO\IOInterface;
@@ -51,6 +52,8 @@ new InputOption('update-keys', null, InputOption::VALUE_NONE, 'Prompt user for a
 new InputOption('stable', null, InputOption::VALUE_NONE, 'Force an update to the stable channel'),
 new InputOption('preview', null, InputOption::VALUE_NONE, 'Force an update to the preview channel'),
 new InputOption('snapshot', null, InputOption::VALUE_NONE, 'Force an update to the snapshot channel'),
+new InputOption('1', null, InputOption::VALUE_NONE, 'Force an update to the stable channel, but only use 1.x versions'),
+new InputOption('2', null, InputOption::VALUE_NONE, 'Force an update to the stable channel, but only use 2.x versions'),
 new InputOption('set-channel-only', null, InputOption::VALUE_NONE, 'Only store the channel as the default one and then exit'),
 ))
 ->setHelp(
@@ -60,6 +63,7 @@ versions of composer and if found, installs the latest.
 
 <info>php composer.phar self-update</info>
 
+Read more at https://getcomposer.org/doc/03-cli.md#self-update-selfupdate-
 EOT
 )
 ;
@@ -76,14 +80,17 @@ $baseUrl = 'https://' . self::HOMEPAGE;
 }
 
 $io = $this->getIO();
-$remoteFilesystem = Factory::createRemoteFilesystem($io, $config);
+$httpDownloader = Factory::createHttpDownloader($io, $config);
 
-$versionsUtil = new Versions($config, $remoteFilesystem);
+$versionsUtil = new Versions($config, $httpDownloader);
 
 
- foreach (array('stable', 'preview', 'snapshot') as $channel) {
+ $requestedChannel = null;
+foreach (Versions::$channels as $channel) {
 if ($input->getOption($channel)) {
+$requestedChannel = $channel;
 $versionsUtil->setChannel($channel);
+break;
 }
 }
 
@@ -98,6 +105,11 @@ $localFilename = realpath($_SERVER['argv'][0]) ?: $_SERVER['argv'][0];
 
 if ($input->getOption('update-keys')) {
 return $this->fetchKeys($io, $config);
+}
+
+
+ if (!file_exists($localFilename)) {
+throw new FilesystemException('Composer update failed: the "'.$localFilename.'" is not accessible');
 }
 
 
@@ -122,8 +134,41 @@ return $this->rollback($output, $rollbackDir, $localFilename);
 }
 
 $latest = $versionsUtil->getLatest();
+$latestStable = $versionsUtil->getLatest('stable');
+try {
+$latestPreview = $versionsUtil->getLatest('preview');
+} catch (\UnexpectedValueException $e) {
+$latestPreview = $latestStable;
+}
 $latestVersion = $latest['version'];
 $updateVersion = $input->getArgument('version') ?: $latestVersion;
+$currentMajorVersion = preg_replace('{^(\d+).*}', '$1', Composer::getVersion());
+$updateMajorVersion = preg_replace('{^(\d+).*}', '$1', $updateVersion);
+$previewMajorVersion = preg_replace('{^(\d+).*}', '$1', $latestPreview['version']);
+
+if ($versionsUtil->getChannel() === 'stable' && !$input->getArgument('version')) {
+
+ 
+ if ($currentMajorVersion < $updateMajorVersion) {
+$skippedVersion = $updateVersion;
+
+$versionsUtil->setChannel($currentMajorVersion);
+
+$latest = $versionsUtil->getLatest();
+$latestStable = $versionsUtil->getLatest('stable');
+$latestVersion = $latest['version'];
+$updateVersion = $latestVersion;
+
+$io->writeError('<warning>A new stable major version of Composer is available ('.$skippedVersion.'), run "composer self-update --'.$updateMajorVersion.'" to update to it. See also https://github.com/composer/composer/releases for changelogs.</warning>');
+} elseif ($currentMajorVersion < $previewMajorVersion) {
+
+ $io->writeError('<warning>A preview release of the next major version of Composer is available ('.$latestPreview['version'].'), run "composer self-update --preview" to give it a try. See also https://github.com/composer/composer/releases for changelogs.</warning>');
+}
+}
+
+if ($requestedChannel && is_numeric($requestedChannel) && substr($latestStable['version'], 0, 1) !== $requestedChannel) {
+$io->writeError('<warning>Warning: You forced the install of '.$latestVersion.' via --'.$requestedChannel.', but '.$latestStable['version'].' is the latest stable version. Updating to it via composer self-update --stable is recommended.</warning>');
+}
 
 if (preg_match('{^[0-9a-f]{40}$}', $updateVersion) && $updateVersion !== $latestVersion) {
 $io->writeError('<error>You can not update to a specific SHA-1 as those phars are not available for download</error>');
@@ -153,11 +198,11 @@ self::OLD_INSTALL_EXT
 
 $updatingToTag = !preg_match('{^[0-9a-f]{40}$}', $updateVersion);
 
-$io->write(sprintf("Updating to version <info>%s</info> (%s channel).", $updateVersion, $versionsUtil->getChannel()));
+$io->write(sprintf("Upgrading to version <info>%s</info> (%s channel).", $updateVersion, $versionsUtil->getChannel()));
 $remoteFilename = $baseUrl . ($updatingToTag ? "/download/{$updateVersion}/composer.phar" : '/composer.phar');
-$signature = $remoteFilesystem->getContents(self::HOMEPAGE, $remoteFilename.'.sig', false);
+$signature = $httpDownloader->get($remoteFilename.'.sig')->getBody();
 $io->writeError('   ', false);
-$remoteFilesystem->copy(self::HOMEPAGE, $remoteFilename, $tempFilename, !$input->getOption('no-progress'));
+$httpDownloader->copy($remoteFilename, $tempFilename);
 $io->writeError('');
 
 if (!file_exists($tempFilename) || !$signature) {
@@ -220,7 +265,7 @@ TAGSPUBKEY
 
 $pubkeyid = openssl_pkey_get_public($sigFile);
 $algo = defined('OPENSSL_ALGO_SHA384') ? OPENSSL_ALGO_SHA384 : 'SHA384';
-if (!in_array('SHA384', openssl_get_md_methods())) {
+if (!in_array('sha384', array_map('strtolower', openssl_get_md_methods()))) {
 throw new \RuntimeException('SHA384 is not supported by your openssl extension, could not verify the phar file integrity');
 }
 $signature = json_decode($signature, true);
@@ -237,10 +282,8 @@ throw new \RuntimeException('The phar signature did not match the file you downl
 $this->cleanBackups($rollbackDir);
 }
 
-if ($err = $this->setLocalPhar($localFilename, $tempFilename, $backupFile)) {
+if (!$this->setLocalPhar($localFilename, $tempFilename, $backupFile)) {
 @unlink($tempFilename);
-$io->writeError('<error>The file is corrupted ('.$err->getMessage().').</error>');
-$io->writeError('<error>Please re-run the self-update command to try again.</error>');
 
 return 1;
 }
@@ -253,6 +296,8 @@ Composer::VERSION
 } else {
 $io->writeError('<warning>A backup of the current version could not be written to '.$backupFile.', no rollback possible</warning>');
 }
+
+return 0;
 }
 
 protected function fetchKeys(IOInterface $io, Config $config)
@@ -318,9 +363,7 @@ throw new FilesystemException('Composer rollback failed: "'.$oldFile.'" could no
 
 $io = $this->getIO();
 $io->writeError(sprintf("Rolling back to version <info>%s</info>.", $rollbackVersion));
-if ($err = $this->setLocalPhar($localFilename, $oldFile)) {
-$io->writeError('<error>The backup file was corrupted ('.$err->getMessage().').</error>');
-
+if (!$this->setLocalPhar($localFilename, $oldFile)) {
 return 1;
 }
 
@@ -334,31 +377,43 @@ return 0;
 
 
 
+
+
 protected function setLocalPhar($localFilename, $newFilename, $backupTarget = null)
 {
-try {
+$io = $this->getIO();
 @chmod($newFilename, fileperms($localFilename));
-if (!ini_get('phar.readonly')) {
 
- $phar = new \Phar($newFilename);
 
- unset($phar);
+ if (!$this->validatePhar($newFilename, $error)) {
+$io->writeError('<error>The '.($backupTarget ? 'update' : 'backup').' file is corrupted ('.$error.')</error>');
+
+if ($backupTarget) {
+$io->writeError('<error>Please re-run the self-update command to try again.</error>');
+}
+
+return false;
 }
 
 
- if ($backupTarget && file_exists($localFilename)) {
+ if ($backupTarget) {
 @copy($localFilename, $backupTarget);
 }
 
+try {
 rename($newFilename, $localFilename);
 
-return null;
+return true;
 } catch (\Exception $e) {
-if (!$e instanceof \UnexpectedValueException && !$e instanceof \PharException) {
-throw $e;
+
+ if (!is_writable(dirname($localFilename))
+&& $io->isInteractive()
+&& $this->isWindowsNonAdminUser()) {
+return $this->tryAsWindowsAdmin($localFilename, $newFilename);
 }
 
-return $e;
+$action = 'Composer '.($backupTarget ? 'update' : 'rollback');
+throw new FilesystemException($action.' failed: "'.$localFilename.'" could not be written.'.PHP_EOL.$e->getMessage());
 }
 }
 
@@ -400,5 +455,110 @@ $finder = Finder::create()
 ->in($rollbackDir);
 
 return $finder;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+protected function validatePhar($pharFile, &$error)
+{
+if (ini_get('phar.readonly')) {
+return true;
+}
+
+try {
+
+ $phar = new \Phar($pharFile);
+
+ unset($phar);
+$result = true;
+} catch (\Exception $e) {
+if (!$e instanceof \UnexpectedValueException && !$e instanceof \PharException) {
+throw $e;
+}
+$error = $e->getMessage();
+$result = false;
+}
+
+return $result;
+}
+
+
+
+
+
+
+protected function isWindowsNonAdminUser()
+{
+if (!Platform::isWindows()) {
+return false;
+}
+
+
+ exec('fltmc.exe filters', $output, $exitCode);
+
+return $exitCode !== 0;
+}
+
+
+
+
+
+
+
+
+
+
+protected function tryAsWindowsAdmin($localFilename, $newFilename)
+{
+$io = $this->getIO();
+
+$io->writeError('<error>Unable to write "'.$localFilename.'". Access is denied.</error>');
+$helpMessage = 'Please run the self-update command as an Administrator.';
+$question = 'Complete this operation with Administrator privileges [<comment>Y,n</comment>]? ';
+
+if (!$io->askConfirmation($question, false)) {
+$io->writeError('<warning>Operation cancelled. '.$helpMessage.'</warning>');
+
+return false;
+}
+
+$tmpFile = tempnam(sys_get_temp_dir(), '');
+$script = $tmpFile.'.vbs';
+rename($tmpFile, $script);
+
+$checksum = hash_file('sha256', $newFilename);
+
+
+ $source = str_replace('/', '\\', $newFilename);
+$destination = str_replace('/', '\\', $localFilename);
+
+$vbs = <<<EOT
+Set UAC = CreateObject("Shell.Application")
+UAC.ShellExecute "cmd.exe", "/c move /y ""$source"" ""$destination""", "", "runas", 0
+Wscript.Sleep(300)
+EOT;
+
+file_put_contents($script, $vbs);
+exec('"'.$script.'"');
+@unlink($script);
+
+
+ if ($result = (hash_file('sha256', $localFilename) === $checksum)) {
+$io->writeError('<info>Operation succeeded.</info>');
+} else {
+$io->writeError('<error>Operation failed (file not written). '.$helpMessage.'</error>');
+};
+
+return $result;
 }
 }

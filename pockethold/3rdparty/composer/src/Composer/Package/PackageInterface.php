@@ -21,6 +21,10 @@ use Composer\Repository\RepositoryInterface;
 
 interface PackageInterface
 {
+const DISPLAY_SOURCE_REF_IF_DEV = 0;
+const DISPLAY_SOURCE_REF = 1;
+const DISPLAY_DIST_REF = 2;
+
 
 
 
@@ -43,7 +47,9 @@ public function getPrettyName();
 
 
 
-public function getNames();
+
+
+public function getNames($provides = true);
 
 
 
@@ -200,7 +206,10 @@ public function getPrettyVersion();
 
 
 
-public function getFullPrettyVersion($truncate = true);
+
+
+
+public function getFullPrettyVersion($truncate = true, $displayMode = self::DISPLAY_SOURCE_REF_IF_DEV);
 
 
 
@@ -262,6 +271,7 @@ public function getDevRequires();
 
 
 
+
 public function getSuggests();
 
 
@@ -274,7 +284,9 @@ public function getSuggests();
 
 
 
+
 public function getAutoload();
+
 
 
 
@@ -350,7 +362,19 @@ public function getPrettyString();
 
 
 
+public function getArchiveName();
+
+
+
+
+
+
 public function getArchiveExcludes();
+
+
+
+
+public function isDefaultBranch();
 
 
 
@@ -358,4 +382,41 @@ public function getArchiveExcludes();
 
 
 public function getTransportOptions();
+
+
+
+
+
+
+public function setSourceReference($reference);
+
+
+
+
+
+
+public function setDistUrl($url);
+
+
+
+
+
+
+public function setDistType($type);
+
+
+
+
+
+
+public function setDistReference($reference);
+
+
+
+
+
+
+
+
+public function setSourceDistReferences($reference);
 }

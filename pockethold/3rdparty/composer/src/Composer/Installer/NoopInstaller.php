@@ -43,6 +43,27 @@ return $repo->hasPackage($package);
 
 
 
+public function download(PackageInterface $package, PackageInterface $prevPackage = null)
+{
+}
+
+
+
+
+public function prepare($type, PackageInterface $package, PackageInterface $prevPackage = null)
+{
+}
+
+
+
+
+public function cleanup($type, PackageInterface $package, PackageInterface $prevPackage = null)
+{
+}
+
+
+
+
 public function install(InstalledRepositoryInterface $repo, PackageInterface $package)
 {
 if (!$repo->hasPackage($package)) {

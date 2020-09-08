@@ -35,6 +35,14 @@ protected $translationMap = array(
 
 
 
+protected $allowedInvalidContentTypeEndpoints = array(
+'http://json-schema.org/',
+'https://json-schema.org/'
+);
+
+
+
+
 protected $uriRetriever = null;
 
 
@@ -43,6 +51,16 @@ protected $uriRetriever = null;
 
 
 private $schemaCache = array();
+
+
+
+
+
+
+public function addInvalidContentTypeEndpoint($endpoint)
+{
+$this->allowedInvalidContentTypeEndpoints[] = $endpoint;
+}
 
 
 
@@ -65,9 +83,10 @@ if (in_array($contentType, array(Validator::SCHEMA_MEDIA_TYPE, 'application/json
 return;
 }
 
-if (substr($uri, 0, 23) == 'http://json-schema.org/') {
-
- return true;
+foreach ($this->allowedInvalidContentTypeEndpoints as $endpoint) {
+if (strpos($uri, $endpoint) === 0) {
+return true;
+}
 }
 
 throw new InvalidSchemaMediaTypeException(sprintf('Media type %s expected', Validator::SCHEMA_MEDIA_TYPE));

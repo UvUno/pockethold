@@ -23,10 +23,14 @@ use Composer\Json\JsonFile;
 
 class GitLab
 {
+
 protected $io;
+
 protected $config;
+
 protected $process;
-protected $remoteFilesystem;
+
+protected $httpDownloader;
 
 
 
@@ -36,12 +40,12 @@ protected $remoteFilesystem;
 
 
 
-public function __construct(IOInterface $io, Config $config, ProcessExecutor $process = null, RemoteFilesystem $remoteFilesystem = null)
+public function __construct(IOInterface $io, Config $config, ProcessExecutor $process = null, HttpDownloader $httpDownloader = null)
 {
 $this->io = $io;
 $this->config = $config;
-$this->process = $process ?: new ProcessExecutor();
-$this->remoteFilesystem = $remoteFilesystem ?: Factory::createRemoteFilesystem($this->io, $config);
+$this->process = $process ?: new ProcessExecutor($io);
+$this->httpDownloader = $httpDownloader ?: Factory::createHttpDownloader($this->io, $config);
 }
 
 
@@ -53,7 +57,10 @@ $this->remoteFilesystem = $remoteFilesystem ?: Factory::createRemoteFilesystem($
 
 public function authorizeOAuth($originUrl)
 {
-if (!in_array($originUrl, $this->config->get('gitlab-domains'), true)) {
+
+ $bcOriginUrl = preg_replace('{:\d+}', '', $originUrl);
+
+if (!in_array($originUrl, $this->config->get('gitlab-domains'), true) && !in_array($bcOriginUrl, $this->config->get('gitlab-domains'), true)) {
 return false;
 }
 
@@ -65,10 +72,27 @@ return true;
 }
 
 
+ if (0 === $this->process->execute('git config gitlab.deploytoken.user', $tokenUser) && 0 === $this->process->execute('git config gitlab.deploytoken.token', $tokenPassword)) {
+$this->io->setAuthentication($originUrl, trim($tokenUser), trim($tokenPassword));
+
+return true;
+}
+
+
  $authTokens = $this->config->get('gitlab-token');
 
 if (isset($authTokens[$originUrl])) {
-$this->io->setAuthentication($originUrl, $authTokens[$originUrl], 'private-token');
+$token = $authTokens[$originUrl];
+}
+
+if (isset($authTokens[$bcOriginUrl])) {
+$token = $authTokens[$bcOriginUrl];
+}
+
+if(isset($token)){
+$username = is_array($token) && array_key_exists("username", $token) ? $token["username"] : $token;
+$password = is_array($token) && array_key_exists("token", $token) ? $token["token"] : 'private-token';
+$this->io->setAuthentication($originUrl, $username, $password);
 
 return true;
 }
@@ -95,7 +119,7 @@ $this->io->writeError($message);
 }
 
 $this->io->writeError(sprintf('A token will be created and stored in "%s", your password will never be stored', $this->config->getAuthConfigSource()->getName()));
-$this->io->writeError('To revoke access to this token you can visit '.$originUrl.'/profile/applications');
+$this->io->writeError('To revoke access to this token you can visit '.$scheme.'://'.$originUrl.'/profile/applications');
 
 $attemptCounter = 0;
 
@@ -107,12 +131,17 @@ $response = $this->createToken($scheme, $originUrl);
  
  if (in_array($e->getCode(), array(403, 401))) {
 if (401 === $e->getCode()) {
+$response = json_decode($e->getResponse(), true);
+if (isset($response['error']) && $response['error'] === 'invalid_grant') {
+$this->io->writeError('Bad credentials. If you have two factor authentication enabled you will have to manually create a personal access token');
+} else {
 $this->io->writeError('Bad credentials.');
+}
 } else {
 $this->io->writeError('Maximum number of login attempts exceeded. Please try again later.');
 }
 
-$this->io->writeError('You can also manually create a personal token at '.$scheme.'://'.$originUrl.'/profile/personal_access_tokens');
+$this->io->writeError('You can also manually create a personal access token enabling the "read_api" scope at '.$scheme.'://'.$originUrl.'/profile/personal_access_tokens');
 $this->io->writeError('Add it using "composer config --global --auth gitlab-token.'.$originUrl.' <token>"');
 
 continue;
@@ -154,10 +183,10 @@ $options = array(
 ),
 );
 
-$json = $this->remoteFilesystem->getContents($originUrl, $scheme.'://'.$apiUrl.'/oauth/token', false, $options);
+$token = $this->httpDownloader->get($scheme.'://'.$apiUrl.'/oauth/token', $options)->decodeJson();
 
 $this->io->writeError('Token successfully created');
 
-return JsonFile::parseJson($json);
+return $token;
 }
 }

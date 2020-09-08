@@ -13,6 +13,7 @@
 namespace Composer\Downloader;
 
 use Composer\Package\PackageInterface;
+use React\Promise\PromiseInterface;
 
 
 
@@ -34,8 +35,31 @@ public function getInstallationSource();
 
 
 
+public function download(PackageInterface $package, $path, PackageInterface $prevPackage = null);
 
-public function download(PackageInterface $package, $path);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+public function prepare($type, PackageInterface $package, $path, PackageInterface $prevPackage = null);
+
+
+
+
+
+
+
+public function install(PackageInterface $package, $path);
 
 
 
@@ -60,5 +84,12 @@ public function remove(PackageInterface $package, $path);
 
 
 
-public function setOutputProgress($outputProgress);
+
+
+
+
+
+
+
+public function cleanup($type, PackageInterface $package, $path, PackageInterface $prevPackage = null);
 }

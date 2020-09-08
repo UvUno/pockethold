@@ -4,11 +4,12 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInitComposerPhar1534431432
+class ComposerStaticInitComposerPhar1596448331
 {
 public static $files = array (
 '320cde22f66dd4f5d3fd621d3e88b98f' => __DIR__ . '/..' . '/symfony/polyfill-ctype/bootstrap.php',
 '0e6d7bf4a5811bfa5cf40c5ccd6fae6a' => __DIR__ . '/..' . '/symfony/polyfill-mbstring/bootstrap.php',
+'7844cce90d4037f1a077c08319eef109' => __DIR__ . '/..' . '/react/promise/src/React/Promise/functions_include.php',
 );
 
 public static $prefixLengthsPsr4 = array (
@@ -109,11 +110,27 @@ array (
 ),
 );
 
+public static $prefixesPsr0 = array (
+'R' => 
+array (
+'React\\Promise' => 
+array (
+0 => __DIR__ . '/..' . '/react/promise/src',
+),
+),
+);
+
+public static $classMap = array (
+'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
+);
+
 public static function getInitializer(ClassLoader $loader)
 {
 return \Closure::bind(function () use ($loader) {
-$loader->prefixLengthsPsr4 = ComposerStaticInitComposerPhar1534431432::$prefixLengthsPsr4;
-$loader->prefixDirsPsr4 = ComposerStaticInitComposerPhar1534431432::$prefixDirsPsr4;
+$loader->prefixLengthsPsr4 = ComposerStaticInitComposerPhar1596448331::$prefixLengthsPsr4;
+$loader->prefixDirsPsr4 = ComposerStaticInitComposerPhar1596448331::$prefixDirsPsr4;
+$loader->prefixesPsr0 = ComposerStaticInitComposerPhar1596448331::$prefixesPsr0;
+$loader->classMap = ComposerStaticInitComposerPhar1596448331::$classMap;
 
 }, null, ClassLoader::class);
 }

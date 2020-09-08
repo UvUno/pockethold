@@ -57,7 +57,9 @@ protected $suggests = array();
 protected $autoload = array();
 protected $devAutoload = array();
 protected $includePaths = array();
+protected $archiveName;
 protected $archiveExcludes = array();
+protected $isDefaultBranch = false;
 
 
 
@@ -556,6 +558,24 @@ return $this->notificationUrl;
 
 
 
+public function setArchiveName($name)
+{
+$this->archiveName = $name;
+}
+
+
+
+
+public function getArchiveName()
+{
+return $this->archiveName;
+}
+
+
+
+
+
+
 public function setArchiveExcludes(array $excludes)
 {
 $this->archiveExcludes = $excludes;
@@ -567,6 +587,39 @@ $this->archiveExcludes = $excludes;
 public function getArchiveExcludes()
 {
 return $this->archiveExcludes;
+}
+
+
+
+
+public function setIsDefaultBranch($defaultBranch)
+{
+$this->isDefaultBranch = $defaultBranch;
+}
+
+
+
+
+public function isDefaultBranch()
+{
+return $this->isDefaultBranch;
+}
+
+
+
+
+public function setSourceDistReferences($reference)
+{
+$this->setSourceReference($reference);
+
+
+ 
+ if (preg_match('{^https?://(?:(?:www\.)?bitbucket\.org|(api\.)?github\.com|(?:www\.)?gitlab\.com)/}i', $this->getDistUrl())) {
+$this->setDistReference($reference);
+$this->setDistUrl(preg_replace('{(?<=/|sha=)[a-f0-9]{40}(?=/|$)}i', $reference, $this->getDistUrl()));
+} elseif ($this->getDistReference()) { 
+ $this->setDistReference($reference);
+}
 }
 
 
@@ -599,8 +652,10 @@ $mirrorUrl = ComposerMirror::processUrl($mirror['url'], $this->name, $this->vers
 $mirrorUrl = ComposerMirror::processGitUrl($mirror['url'], $this->name, $url, $type);
 } elseif ($urlType === 'source' && $type === 'hg') {
 $mirrorUrl = ComposerMirror::processHgUrl($mirror['url'], $this->name, $url, $type);
+} else {
+continue;
 }
-if (!in_array($mirrorUrl, $urls)) {
+if (!\in_array($mirrorUrl, $urls)) {
 $func = $mirror['preferred'] ? 'array_unshift' : 'array_push';
 $func($urls, $mirrorUrl);
 }

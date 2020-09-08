@@ -28,7 +28,7 @@ private static $cacheCollected = false;
 private $io;
 private $root;
 private $enabled = true;
-private $whitelist;
+private $allowlist;
 private $filesystem;
 
 
@@ -37,14 +37,14 @@ private $filesystem;
 
 
 
-public function __construct(IOInterface $io, $cacheDir, $whitelist = 'a-z0-9.', Filesystem $filesystem = null)
+public function __construct(IOInterface $io, $cacheDir, $allowlist = 'a-z0-9.', Filesystem $filesystem = null)
 {
 $this->io = $io;
 $this->root = rtrim($cacheDir, '/\\') . '/';
-$this->whitelist = $whitelist;
+$this->allowlist = $allowlist;
 $this->filesystem = $filesystem ?: new Filesystem();
 
-if (preg_match('{(^|[\\\\/])(\$null|NUL|/dev/null)([\\\\/]|$)}', $cacheDir)) {
+if (!self::isUsable($cacheDir)) {
 $this->enabled = false;
 
 return;
@@ -57,6 +57,11 @@ if (
 $this->io->writeError('<warning>Cannot create cache directory ' . $this->root . ', or directory is not writable. Proceeding without cache</warning>');
 $this->enabled = false;
 }
+}
+
+public static function isUsable($path)
+{
+return !preg_match('{(^|[\\\\/])(\$null|nul|NUL|/dev/null)([\\\\/]|$)}', $path);
 }
 
 public function isEnabled()
@@ -72,7 +77,7 @@ return $this->root;
 public function read($file)
 {
 if ($this->enabled) {
-$file = preg_replace('{[^'.$this->whitelist.']}i', '-', $file);
+$file = preg_replace('{[^'.$this->allowlist.']}i', '-', $file);
 if (file_exists($this->root . $file)) {
 $this->io->writeError('Reading '.$this->root . $file.' from cache', true, IOInterface::DEBUG);
 
@@ -86,7 +91,7 @@ return false;
 public function write($file, $contents)
 {
 if ($this->enabled) {
-$file = preg_replace('{[^'.$this->whitelist.']}i', '-', $file);
+$file = preg_replace('{[^'.$this->allowlist.']}i', '-', $file);
 
 $this->io->writeError('Writing '.$this->root . $file.' into cache', true, IOInterface::DEBUG);
 
@@ -124,7 +129,7 @@ return false;
 public function copyFrom($file, $source)
 {
 if ($this->enabled) {
-$file = preg_replace('{[^'.$this->whitelist.']}i', '-', $file);
+$file = preg_replace('{[^'.$this->allowlist.']}i', '-', $file);
 $this->filesystem->ensureDirectoryExists(dirname($this->root . $file));
 
 if (!file_exists($source)) {
@@ -145,7 +150,7 @@ return false;
 public function copyTo($file, $target)
 {
 if ($this->enabled) {
-$file = preg_replace('{[^'.$this->whitelist.']}i', '-', $file);
+$file = preg_replace('{[^'.$this->allowlist.']}i', '-', $file);
 if (file_exists($this->root . $file)) {
 try {
 touch($this->root . $file, filemtime($this->root . $file), time());
@@ -172,7 +177,7 @@ return (!self::$cacheCollected && !mt_rand(0, 50));
 public function remove($file)
 {
 if ($this->enabled) {
-$file = preg_replace('{[^'.$this->whitelist.']}i', '-', $file);
+$file = preg_replace('{[^'.$this->allowlist.']}i', '-', $file);
 if (file_exists($this->root . $file)) {
 return $this->filesystem->unlink($this->root . $file);
 }
@@ -184,7 +189,8 @@ return false;
 public function clear()
 {
 if ($this->enabled) {
-return $this->filesystem->removeDirectory($this->root);
+$this->filesystem->emptyDirectory($this->root);
+return true;
 }
 
 return false;
@@ -223,7 +229,7 @@ return false;
 public function sha1($file)
 {
 if ($this->enabled) {
-$file = preg_replace('{[^'.$this->whitelist.']}i', '-', $file);
+$file = preg_replace('{[^'.$this->allowlist.']}i', '-', $file);
 if (file_exists($this->root . $file)) {
 return sha1_file($this->root . $file);
 }
@@ -235,7 +241,7 @@ return false;
 public function sha256($file)
 {
 if ($this->enabled) {
-$file = preg_replace('{[^'.$this->whitelist.']}i', '-', $file);
+$file = preg_replace('{[^'.$this->allowlist.']}i', '-', $file);
 if (file_exists($this->root . $file)) {
 return hash_file('sha256', $this->root . $file);
 }

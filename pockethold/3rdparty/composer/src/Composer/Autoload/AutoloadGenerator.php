@@ -19,8 +19,12 @@ use Composer\IO\IOInterface;
 use Composer\Package\AliasPackage;
 use Composer\Package\PackageInterface;
 use Composer\Repository\InstalledRepositoryInterface;
+use Composer\Repository\PlatformRepository;
+use Composer\Semver\Constraint\Bound;
+use Composer\Semver\Constraint\MatchAllConstraint;
 use Composer\Util\Filesystem;
 use Composer\Script\ScriptEvents;
+use Composer\Util\PackageSorter;
 
 
 
@@ -57,6 +61,11 @@ private $apcu = false;
 
 
 private $runScripts = false;
+
+
+
+
+private $ignorePlatformReqs = false;
 
 public function __construct(EventDispatcher $eventDispatcher, IOInterface $io = null)
 {
@@ -100,15 +109,35 @@ public function setRunScripts($runScripts = true)
 $this->runScripts = (bool) $runScripts;
 }
 
-public function dump(Config $config, InstalledRepositoryInterface $localRepo, PackageInterface $mainPackage, InstallationManager $installationManager, $targetDir, $scanPsr0Packages = false, $suffix = '')
+
+
+
+
+
+
+
+
+
+public function setIgnorePlatformRequirements($ignorePlatformReqs)
+{
+if (is_array($ignorePlatformReqs)) {
+$this->ignorePlatformReqs = array_filter($ignorePlatformReqs, function ($req) {
+return (bool) preg_match(PlatformRepository::PLATFORM_PACKAGE_REGEX, $req);
+});
+} else {
+$this->ignorePlatformReqs = (bool) $ignorePlatformReqs;
+}
+}
+
+public function dump(Config $config, InstalledRepositoryInterface $localRepo, PackageInterface $mainPackage, InstallationManager $installationManager, $targetDir, $scanPsrPackages = false, $suffix = '')
 {
 if ($this->classMapAuthoritative) {
 
- $scanPsr0Packages = true;
+ $scanPsrPackages = true;
 }
 if ($this->runScripts) {
 $this->eventDispatcher->dispatchScript(ScriptEvents::PRE_AUTOLOAD_DUMP, $this->devMode, array(), array(
-'optimize' => (bool) $scanPsr0Packages,
+'optimize' => (bool) $scanPsrPackages,
 ));
 }
 
@@ -228,18 +257,23 @@ $targetDirLoader = <<<EOF
 EOF;
 }
 
-$blacklist = null;
+$excluded = null;
 if (!empty($autoloads['exclude-from-classmap'])) {
-$blacklist = '{(' . implode('|', $autoloads['exclude-from-classmap']) . ')}';
+$excluded = '{(' . implode('|', $autoloads['exclude-from-classmap']) . ')}';
 }
 
+$classMap = array();
+$ambiguousClasses = array();
+$scannedFiles = array();
+foreach ($autoloads['classmap'] as $dir) {
+$classMap = $this->addClassMapCode($filesystem, $basePath, $vendorPath, $dir, $excluded, null, null, $classMap, $ambiguousClasses, $scannedFiles);
+}
 
- $classMap = array();
-if ($scanPsr0Packages) {
+if ($scanPsrPackages) {
 $namespacesToScan = array();
 
 
- foreach (array('psr-0', 'psr-4') as $psrType) {
+ foreach (array('psr-4', 'psr-0') as $psrType) {
 foreach ($autoloads[$psrType] as $namespace => $paths) {
 $namespacesToScan[$namespace][] = array('paths' => $paths, 'type' => $psrType);
 }
@@ -255,17 +289,22 @@ if (!is_dir($dir)) {
 continue;
 }
 
-$namespaceFilter = $namespace === '' ? null : $namespace;
-$classMap = $this->addClassMapCode($filesystem, $basePath, $vendorPath, $dir, $blacklist, $namespaceFilter, $classMap);
+$classMap = $this->addClassMapCode($filesystem, $basePath, $vendorPath, $dir, $excluded, $namespace, $group['type'], $classMap, $ambiguousClasses, $scannedFiles);
 }
 }
 }
 }
 
-foreach ($autoloads['classmap'] as $dir) {
-$classMap = $this->addClassMapCode($filesystem, $basePath, $vendorPath, $dir, $blacklist, null, $classMap);
+foreach ($ambiguousClasses as $className => $ambigiousPaths) {
+$cleanPath = str_replace(array('$vendorDir . \'', '$baseDir . \'', "',\n"), array($vendorPath, $basePath, ''), $classMap[$className]);
+
+$this->io->writeError(
+'<warning>Warning: Ambiguous class resolution, "'.$className.'"'.
+' was found '. (count($ambigiousPaths) + 1) .'x: in "'.$cleanPath.'" and "'. implode('", "', $ambigiousPaths) .'", the first will be used.</warning>'
+);
 }
 
+$classMap['Composer\\InstalledVersions'] = "\$vendorDir . '/composer/InstalledVersions.php',\n";
 ksort($classMap);
 foreach ($classMap as $class => $code) {
 $classmapFile .= '    '.var_export($class, true).' => '.$code;
@@ -285,55 +324,67 @@ $suffix = $config->get('autoloader-suffix') ?: md5(uniqid('', true));
 }
 }
 
-file_put_contents($targetDir.'/autoload_namespaces.php', $namespacesFile);
-file_put_contents($targetDir.'/autoload_psr4.php', $psr4File);
-file_put_contents($targetDir.'/autoload_classmap.php', $classmapFile);
+$filesystem->filePutContentsIfModified($targetDir.'/autoload_namespaces.php', $namespacesFile);
+$filesystem->filePutContentsIfModified($targetDir.'/autoload_psr4.php', $psr4File);
+$filesystem->filePutContentsIfModified($targetDir.'/autoload_classmap.php', $classmapFile);
 $includePathFilePath = $targetDir.'/include_paths.php';
 if ($includePathFileContents = $this->getIncludePathsFile($packageMap, $filesystem, $basePath, $vendorPath, $vendorPathCode52, $appBaseDirCode)) {
-file_put_contents($includePathFilePath, $includePathFileContents);
+$filesystem->filePutContentsIfModified($includePathFilePath, $includePathFileContents);
 } elseif (file_exists($includePathFilePath)) {
 unlink($includePathFilePath);
 }
 $includeFilesFilePath = $targetDir.'/autoload_files.php';
 if ($includeFilesFileContents = $this->getIncludeFilesFile($autoloads['files'], $filesystem, $basePath, $vendorPath, $vendorPathCode52, $appBaseDirCode)) {
-file_put_contents($includeFilesFilePath, $includeFilesFileContents);
+$filesystem->filePutContentsIfModified($includeFilesFilePath, $includeFilesFileContents);
 } elseif (file_exists($includeFilesFilePath)) {
 unlink($includeFilesFilePath);
 }
-file_put_contents($targetDir.'/autoload_static.php', $this->getStaticFile($suffix, $targetDir, $vendorPath, $basePath, $staticPhpVersion));
-file_put_contents($vendorPath.'/autoload.php', $this->getAutoloadFile($vendorPathToTargetDirCode, $suffix));
-file_put_contents($targetDir.'/autoload_real.php', $this->getAutoloadRealFile(true, (bool) $includePathFileContents, $targetDirLoader, (bool) $includeFilesFileContents, $vendorPathCode, $appBaseDirCode, $suffix, $useGlobalIncludePath, $prependAutoloader, $staticPhpVersion));
+$filesystem->filePutContentsIfModified($targetDir.'/autoload_static.php', $this->getStaticFile($suffix, $targetDir, $vendorPath, $basePath, $staticPhpVersion));
+$checkPlatform = $config->get('platform-check') && $this->ignorePlatformReqs !== true;
+$platformCheckContent = null;
+if ($checkPlatform) {
+$platformCheckContent = $this->getPlatformCheck($packageMap, $this->ignorePlatformReqs ?: array());
+if (null === $platformCheckContent) {
+$checkPlatform = false;
+}
+}
+if ($checkPlatform) {
+$filesystem->filePutContentsIfModified($targetDir.'/platform_check.php', $platformCheckContent);
+} elseif (file_exists($targetDir.'/platform_check.php')) {
+unlink($targetDir.'/platform_check.php');
+}
+$filesystem->filePutContentsIfModified($vendorPath.'/autoload.php', $this->getAutoloadFile($vendorPathToTargetDirCode, $suffix));
+$filesystem->filePutContentsIfModified($targetDir.'/autoload_real.php', $this->getAutoloadRealFile(true, (bool) $includePathFileContents, $targetDirLoader, (bool) $includeFilesFileContents, $vendorPathCode, $appBaseDirCode, $suffix, $useGlobalIncludePath, $prependAutoloader, $staticPhpVersion, $checkPlatform));
 
-$this->safeCopy(__DIR__.'/ClassLoader.php', $targetDir.'/ClassLoader.php');
-$this->safeCopy(__DIR__.'/../../../LICENSE', $targetDir.'/LICENSE');
+$filesystem->safeCopy(__DIR__.'/ClassLoader.php', $targetDir.'/ClassLoader.php');
+$filesystem->safeCopy(__DIR__.'/../../../LICENSE', $targetDir.'/LICENSE');
 
 if ($this->runScripts) {
 $this->eventDispatcher->dispatchScript(ScriptEvents::POST_AUTOLOAD_DUMP, $this->devMode, array(), array(
-'optimize' => (bool) $scanPsr0Packages,
+'optimize' => (bool) $scanPsrPackages,
 ));
 }
+
+return count($classMap);
 }
 
-private function addClassMapCode($filesystem, $basePath, $vendorPath, $dir, $blacklist = null, $namespaceFilter = null, array $classMap = array())
+private function addClassMapCode($filesystem, $basePath, $vendorPath, $dir, $excluded, $namespaceFilter, $autoloadType, array $classMap, array &$ambiguousClasses, array &$scannedFiles)
 {
-foreach ($this->generateClassMap($dir, $blacklist, $namespaceFilter) as $class => $path) {
+foreach ($this->generateClassMap($dir, $excluded, $namespaceFilter, $autoloadType, true, $scannedFiles) as $class => $path) {
 $pathCode = $this->getPathCode($filesystem, $basePath, $vendorPath, $path).",\n";
 if (!isset($classMap[$class])) {
 $classMap[$class] = $pathCode;
 } elseif ($this->io && $classMap[$class] !== $pathCode && !preg_match('{/(test|fixture|example|stub)s?/}i', strtr($classMap[$class].' '.$path, '\\', '/'))) {
-$this->io->writeError(
-'<warning>Warning: Ambiguous class resolution, "'.$class.'"'.
-' was found in both "'.str_replace(array('$vendorDir . \'', "',\n"), array($vendorPath, ''), $classMap[$class]).'" and "'.$path.'", the first will be used.</warning>'
-);
+$ambiguousClasses[$class][] = $path;
 }
 }
 
 return $classMap;
 }
 
-private function generateClassMap($dir, $blacklist = null, $namespaceFilter = null, $showAmbiguousWarning = true)
+private function generateClassMap($dir, $excluded, $namespaceFilter, $autoloadType, $showAmbiguousWarning, array &$scannedFiles)
 {
-return ClassMapGenerator::createMap($dir, $blacklist, $showAmbiguousWarning ? $this->io : null, $namespaceFilter);
+return ClassMapGenerator::createMap($dir, $excluded, $showAmbiguousWarning ? $this->io : null, $namespaceFilter, $autoloadType, $scannedFiles);
 }
 
 public function buildPackageMap(InstallationManager $installationManager, PackageInterface $mainPackage, array $packages)
@@ -437,14 +488,15 @@ $loader->addPsr4($namespace, $path);
 }
 
 if (isset($autoloads['classmap'])) {
-$blacklist = null;
+$excluded = null;
 if (!empty($autoloads['exclude-from-classmap'])) {
-$blacklist = '{(' . implode('|', $autoloads['exclude-from-classmap']) . ')}';
+$excluded = '{(' . implode('|', $autoloads['exclude-from-classmap']) . ')}';
 }
 
+$scannedFiles = array();
 foreach ($autoloads['classmap'] as $dir) {
 try {
-$loader->addClassMap($this->generateClassMap($dir, $blacklist, null, false));
+$loader->addClassMap($this->generateClassMap($dir, $excluded, null, null, false, $scannedFiles));
 } catch (\RuntimeException $e) {
 $this->io->writeError('<warning>'.$e->getMessage().'</warning>');
 }
@@ -543,11 +595,144 @@ $path = '/' . $path;
 }
 }
 
-if (preg_match('/\.phar.+$/', $path)) {
+if (strpos($path, '.phar') !== false) {
 $baseDir = "'phar://' . " . $baseDir;
 }
 
 return $baseDir . (($path !== false) ? var_export($path, true) : "");
+}
+
+protected function getPlatformCheck($packageMap, array $ignorePlatformReqs)
+{
+$lowestPhpVersion = Bound::zero();
+$requiredExtensions = array();
+$extensionProviders = array();
+
+foreach ($packageMap as $item) {
+list($package, $installPath) = $item;
+foreach (array_merge($package->getReplaces(), $package->getProvides()) as $link) {
+if (preg_match('{^ext-(.+)$}iD', $link->getTarget(), $match)) {
+$extensionProviders[$match[1]][] = $link->getConstraint() ?: new MatchAllConstraint();
+}
+}
+}
+
+foreach ($packageMap as $item) {
+list($package, $installPath) = $item;
+foreach ($package->getRequires() as $link) {
+if (in_array($link->getTarget(), $ignorePlatformReqs, true)) {
+continue;
+}
+
+if ('php' === $link->getTarget() && ($constraint = $link->getConstraint())) {
+if ($constraint->getLowerBound()->compareTo($lowestPhpVersion, '>')) {
+$lowestPhpVersion = $constraint->getLowerBound();
+}
+}
+
+if (preg_match('{^ext-(.+)$}iD', $link->getTarget(), $match)) {
+
+ if (isset($extensionProviders[$match[1]])) {
+foreach ($extensionProviders[$match[1]] as $provided) {
+if (!$link->getConstraint() || $provided->matches($link->getConstraint())) {
+continue 2;
+}
+}
+}
+
+if ($match[1] === 'zend-opcache') {
+$match[1] = 'zend opcache';
+}
+
+$extension = var_export($match[1], true);
+if ($match[1] === 'pcntl' || $match[1] === 'readline') {
+$requiredExtensions[$extension] = "PHP_SAPI !== 'cli' || extension_loaded($extension) || \$missingExtensions[] = $extension;\n";
+} else {
+$requiredExtensions[$extension] = "extension_loaded($extension) || \$missingExtensions[] = $extension;\n";
+}
+}
+}
+}
+
+ksort($requiredExtensions);
+
+$formatToPhpVersionId = function (Bound $bound) {
+if ($bound->isZero()) {
+return 0;
+}
+
+if ($bound->isPositiveInfinity()) {
+return 99999;
+}
+
+$version = str_replace('-', '.', $bound->getVersion());
+$chunks = array_map('intval', explode('.', $version));
+return $chunks[0] * 10000 + $chunks[1] * 100 + $chunks[2];
+};
+
+$formatToHumanReadable = function (Bound $bound) {
+if ($bound->isZero()) {
+return 0;
+}
+
+if ($bound->isPositiveInfinity()) {
+return 99999;
+}
+
+$version = str_replace('-', '.', $bound->getVersion());
+$chunks = explode('.', $version);
+$chunks = array_slice($chunks, 0, 3);
+return implode('.', $chunks);
+};
+
+$requiredPhp = '';
+$requiredPhpError = '';
+if (!$lowestPhpVersion->isZero()) {
+$operator = $lowestPhpVersion->isInclusive() ? '>=' : '>';
+$requiredPhp = 'PHP_VERSION_ID '.$operator.' '.$formatToPhpVersionId($lowestPhpVersion);
+$requiredPhpError = '"'.$operator.' '.$formatToHumanReadable($lowestPhpVersion).'"';
+}
+
+if ($requiredPhp) {
+$requiredPhp = <<<PHP_CHECK
+
+if (!($requiredPhp)) {
+    \$issues[] = 'Your Composer dependencies require a PHP version $requiredPhpError. You are running ' . PHP_VERSION  .  '.';
+}
+
+PHP_CHECK;
+}
+
+$requiredExtensions = implode('', $requiredExtensions);
+if ('' !== $requiredExtensions) {
+$requiredExtensions = <<<EXT_CHECKS
+
+\$missingExtensions = array();
+$requiredExtensions
+if (\$missingExtensions) {
+    \$issues[] = 'Your Composer dependencies require the following PHP extensions to be installed: ' . implode(', ', \$missingExtensions);
+}
+
+EXT_CHECKS;
+}
+
+if (!$requiredPhp && !$requiredExtensions) {
+return null;
+}
+
+return <<<PLATFORM_CHECK
+<?php
+
+// platform_check.php @generated by Composer
+
+\$issues = array();
+${requiredPhp}${requiredExtensions}
+if (\$issues) {
+    echo 'Composer detected issues in your platform:' . "\\n\\n" . implode("\\n", \$issues);
+    exit(104);
+}
+
+PLATFORM_CHECK;
 }
 
 protected function getAutoloadFile($vendorPathToTargetDirCode, $suffix)
@@ -571,7 +756,7 @@ return ComposerAutoloaderInit$suffix::getLoader();
 AUTOLOAD;
 }
 
-protected function getAutoloadRealFile($useClassMap, $useIncludePath, $targetDirLoader, $useIncludeFiles, $vendorPathCode, $appBaseDirCode, $suffix, $useGlobalIncludePath, $prependAutoloader, $staticPhpVersion = 70000)
+protected function getAutoloadRealFile($useClassMap, $useIncludePath, $targetDirLoader, $useIncludeFiles, $vendorPathCode, $appBaseDirCode, $suffix, $useGlobalIncludePath, $prependAutoloader, $staticPhpVersion, $checkPlatform)
 {
 $file = <<<HEADER
 <?php
@@ -589,18 +774,33 @@ class ComposerAutoloaderInit$suffix
         }
     }
 
+    /**
+     * @return \Composer\Autoload\ClassLoader
+     */
     public static function getLoader()
     {
         if (null !== self::\$loader) {
             return self::\$loader;
         }
 
+
+HEADER;
+
+if ($checkPlatform) {
+$file .= <<<'PLATFORM_CHECK'
+        require __DIR__ . '/platform_check.php';
+
+
+PLATFORM_CHECK;
+}
+
+$file .= <<<CLASSLOADER_INIT
         spl_autoload_register(array('ComposerAutoloaderInit$suffix', 'loadClassLoader'), true, $prependAutoloader);
         self::\$loader = \$loader = new \\Composer\\Autoload\\ClassLoader();
         spl_autoload_unregister(array('ComposerAutoloaderInit$suffix', 'loadClassLoader'));
 
 
-HEADER;
+CLASSLOADER_INIT;
 
 if ($useIncludePath) {
 $file .= <<<'INCLUDE_PATH'
@@ -615,7 +815,7 @@ INCLUDE_PATH;
 $file .= <<<STATIC_INIT
         \$useStaticLoader = PHP_VERSION_ID >= $staticPhpVersion && !defined('HHVM_VERSION') && (!function_exists('zend_loader_file_encoded') || !zend_loader_file_encoded());
         if (\$useStaticLoader) {
-            require_once __DIR__ . '/autoload_static.php';
+            require __DIR__ . '/autoload_static.php';
 
             call_user_func(\Composer\Autoload\ComposerStaticInit$suffix::getInitializer(\$loader));
         } else {
@@ -767,10 +967,14 @@ $loader->addClassMap($classMap);
 $filesystem = new Filesystem();
 
 $vendorPathCode = ' => ' . $filesystem->findShortestPathCode(realpath($targetDir), $vendorPath, true, true) . " . '/";
+$vendorPharPathCode = ' => \'phar://\' . ' . $filesystem->findShortestPathCode(realpath($targetDir), $vendorPath, true, true) . " . '/";
 $appBaseDirCode = ' => ' . $filesystem->findShortestPathCode(realpath($targetDir), $basePath, true, true) . " . '/";
+$appBaseDirPharCode = ' => \'phar://\' . ' . $filesystem->findShortestPathCode(realpath($targetDir), $basePath, true, true) . " . '/";
 
 $absoluteVendorPathCode = ' => ' . substr(var_export(rtrim($vendorDir, '\\/') . '/', true), 0, -1);
+$absoluteVendorPharPathCode = ' => ' . substr(var_export(rtrim('phar://' . $vendorDir, '\\/') . '/', true), 0, -1);
 $absoluteAppBaseDirCode = ' => ' . substr(var_export(rtrim($baseDir, '\\/') . '/', true), 0, -1);
+$absoluteAppBaseDirPharCode = ' => ' . substr(var_export(rtrim('phar://' . $baseDir, '\\/') . '/', true), 0, -1);
 
 $initializer = '';
 $prefix = "\0Composer\Autoload\ClassLoader\0";
@@ -793,9 +997,15 @@ if (count($value) > 32767) {
  
  $staticPhpVersion = 70000;
 }
-$value = var_export($value, true);
-$value = str_replace($absoluteVendorPathCode, $vendorPathCode, $value);
-$value = str_replace($absoluteAppBaseDirCode, $appBaseDirCode, $value);
+$value = strtr(
+var_export($value, true),
+array(
+$absoluteVendorPathCode => $vendorPathCode,
+$absoluteVendorPharPathCode => $vendorPharPathCode,
+$absoluteAppBaseDirCode => $appBaseDirCode,
+$absoluteAppBaseDirPharCode => $appBaseDirPharCode,
+)
+);
 $value = ltrim(preg_replace('/^ */m', '    $0$0', $value));
 
 $file .= sprintf("    public static $%s = %s;\n\n", $prop, $value);
@@ -854,8 +1064,7 @@ if ($type === 'exclude-from-classmap') {
  $path = preg_replace('{/+}', '/', preg_quote(trim(strtr($path, '\\', '/'), '/')));
 
 
- $path = str_replace('\\*\\*', '.+?', $path);
-$path = str_replace('\\*', '[^/]+?', $path);
+ $path = strtr($path, array('\\*\\*' => '.+?', '\\*' => '[^/]+?'));
 
 
  $updir = null;
@@ -876,7 +1085,7 @@ $installPath = strtr(getcwd(), '\\', '/');
 }
 
 $resolvedPath = realpath($installPath . '/' . $updir);
-$autoloads[] = preg_quote(strtr($resolvedPath, '\\', '/')) . '/' . $path;
+$autoloads[] = preg_quote(strtr($resolvedPath, '\\', '/')) . '/' . $path . '($|/)';
 continue;
 }
 
@@ -914,16 +1123,23 @@ protected function filterPackageMap(array $packageMap, PackageInterface $mainPac
 {
 $packages = array();
 $include = array();
+$replacedBy = array();
 
 foreach ($packageMap as $item) {
 $package = $item[0];
 $name = $package->getName();
 $packages[$name] = $package;
+foreach ($package->getReplaces() as $replace) {
+$replacedBy[$replace->getTarget()] = $name;
+}
 }
 
-$add = function (PackageInterface $package) use (&$add, $packages, &$include) {
+$add = function (PackageInterface $package) use (&$add, $packages, &$include, $replacedBy) {
 foreach ($package->getRequires() as $link) {
 $target = $link->getTarget();
+if (isset($replacedBy[$target])) {
+$target = $replacedBy[$target];
+}
 if (!isset($include[$target])) {
 $include[$target] = true;
 if (isset($packages[$target])) {
@@ -938,9 +1154,13 @@ return array_filter(
 $packageMap,
 function ($item) use ($include) {
 $package = $item[0];
-$name = $package->getName();
+foreach ($package->getNames() as $name) {
+if (isset($include[$name])) {
+return true;
+}
+}
 
-return isset($include[$name]);
+return false;
 }
 );
 }
@@ -957,99 +1177,23 @@ protected function sortPackageMap(array $packageMap)
 {
 $packages = array();
 $paths = array();
-$usageList = array();
 
 foreach ($packageMap as $item) {
 list($package, $path) = $item;
 $name = $package->getName();
 $packages[$name] = $package;
 $paths[$name] = $path;
-
-foreach (array_merge($package->getRequires(), $package->getDevRequires()) as $link) {
-$target = $link->getTarget();
-$usageList[$target][] = $name;
-}
 }
 
-$computing = array();
-$computed = array();
-$computeImportance = function ($name) use (&$computeImportance, &$computing, &$computed, $usageList) {
-
- if (isset($computed[$name])) {
-return $computed[$name];
-}
-
-
- if (isset($computing[$name])) {
-return 0;
-}
-
-$computing[$name] = true;
-$weight = 0;
-
-if (isset($usageList[$name])) {
-foreach ($usageList[$name] as $user) {
-$weight -= 1 - $computeImportance($user);
-}
-}
-
-unset($computing[$name]);
-$computed[$name] = $weight;
-
-return $weight;
-};
-
-$weightList = array();
-
-foreach ($packages as $name => $package) {
-$weight = $computeImportance($name);
-$weightList[$name] = $weight;
-}
-
-$stable_sort = function (&$array) {
-static $transform, $restore;
-
-$i = 0;
-
-if (!$transform) {
-$transform = function (&$v, $k) use (&$i) {
-$v = array($v, ++$i, $k, $v);
-};
-
-$restore = function (&$v, $k) {
-$v = $v[3];
-};
-}
-
-array_walk($array, $transform);
-asort($array);
-array_walk($array, $restore);
-};
-
-$stable_sort($weightList);
+$sortedPackages = PackageSorter::sortPackages($packages);
 
 $sortedPackageMap = array();
 
-foreach (array_keys($weightList) as $name) {
+foreach ($sortedPackages as $package) {
+$name = $package->getName();
 $sortedPackageMap[] = array($packages[$name], $paths[$name]);
 }
 
 return $sortedPackageMap;
-}
-
-
-
-
-
-
-
-protected function safeCopy($source, $target)
-{
-$source = fopen($source, 'r');
-$target = fopen($target, 'w+');
-
-stream_copy_to_stream($source, $target);
-fclose($source);
-fclose($target);
 }
 }

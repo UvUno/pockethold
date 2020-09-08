@@ -49,6 +49,7 @@ new InputArgument('tokens', InputArgument::IS_ARRAY | InputArgument::REQUIRED, '
 The search command searches for packages by its name
 <info>php composer.phar search symfony composer</info>
 
+Read more at https://getcomposer.org/doc/03-cli.md#search
 EOT
 )
 ;
@@ -78,5 +79,7 @@ $results = $repos->search(implode(' ', $input->getArgument('tokens')), $flags, $
 foreach ($results as $result) {
 $io->write($result['name'] . (isset($result['description']) ? ' '. $result['description'] : ''));
 }
+
+return 0;
 }
 }

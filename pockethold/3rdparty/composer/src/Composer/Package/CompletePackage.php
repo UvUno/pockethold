@@ -27,6 +27,7 @@ protected $description;
 protected $homepage;
 protected $scripts = array();
 protected $support = array();
+protected $funding = array();
 protected $abandoned = false;
 
 
@@ -174,6 +175,24 @@ return $this->support;
 
 
 
+
+
+public function setFunding(array $funding)
+{
+$this->funding = $funding;
+}
+
+
+
+
+public function getFunding()
+{
+return $this->funding;
+}
+
+
+
+
 public function isAbandoned()
 {
 return (bool) $this->abandoned;
@@ -194,6 +213,6 @@ $this->abandoned = $abandoned;
 
 public function getReplacementPackage()
 {
-return is_string($this->abandoned) ? $this->abandoned : null;
+return \is_string($this->abandoned) ? $this->abandoned : null;
 }
 }

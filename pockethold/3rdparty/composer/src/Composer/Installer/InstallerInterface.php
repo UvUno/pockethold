@@ -15,6 +15,7 @@ namespace Composer\Installer;
 use Composer\Package\PackageInterface;
 use Composer\Repository\InstalledRepositoryInterface;
 use InvalidArgumentException;
+use React\Promise\PromiseInterface;
 
 
 
@@ -48,7 +49,33 @@ public function isInstalled(InstalledRepositoryInterface $repo, PackageInterface
 
 
 
+
+public function download(PackageInterface $package, PackageInterface $prevPackage = null);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+public function prepare($type, PackageInterface $package, PackageInterface $prevPackage = null);
+
+
+
+
+
+
+
+
 public function install(InstalledRepositoryInterface $repo, PackageInterface $package);
+
 
 
 
@@ -67,7 +94,22 @@ public function update(InstalledRepositoryInterface $repo, PackageInterface $ini
 
 
 
+
 public function uninstall(InstalledRepositoryInterface $repo, PackageInterface $package);
+
+
+
+
+
+
+
+
+
+
+
+
+
+public function cleanup($type, PackageInterface $package, PackageInterface $prevPackage = null);
 
 
 

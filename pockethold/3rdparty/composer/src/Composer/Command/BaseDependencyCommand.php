@@ -12,11 +12,12 @@
 
 namespace Composer\Command;
 
-use Composer\DependencyResolver\Pool;
 use Composer\Package\Link;
 use Composer\Package\PackageInterface;
-use Composer\Repository\ArrayRepository;
+use Composer\Repository\InstalledArrayRepository;
 use Composer\Repository\CompositeRepository;
+use Composer\Repository\RootPackageRepository;
+use Composer\Repository\InstalledRepository;
 use Composer\Repository\PlatformRepository;
 use Composer\Repository\RepositoryFactory;
 use Composer\Plugin\CommandEvent;
@@ -71,15 +72,12 @@ protected function doExecute(InputInterface $input, OutputInterface $output, $in
 $commandEvent = new CommandEvent(PluginEvents::COMMAND, $this->getName(), $input, $output);
 $composer->getEventDispatcher()->dispatch($commandEvent->getName(), $commandEvent);
 
-
- $platformOverrides = $composer->getConfig()->get('platform') ?: array();
-$repository = new CompositeRepository(array(
-new ArrayRepository(array($composer->getPackage())),
+$platformOverrides = $composer->getConfig()->get('platform') ?: array();
+$installedRepo = new InstalledRepository(array(
+new RootPackageRepository($composer->getPackage()),
 $composer->getRepositoryManager()->getLocalRepository(),
 new PlatformRepository(array(), $platformOverrides),
 ));
-$pool = new Pool();
-$pool->addRepository($repository);
 
 
  list($needle, $textConstraint) = array_pad(
@@ -89,17 +87,17 @@ $input->getArgument(self::ARGUMENT_CONSTRAINT)
 );
 
 
- $packages = $pool->whatProvides(strtolower($needle));
+ $packages = $installedRepo->findPackagesWithReplacersAndProviders($needle);
 if (empty($packages)) {
 throw new \InvalidArgumentException(sprintf('Could not find package "%s" in your project', $needle));
 }
 
 
  
- if (!$repository->findPackage($needle, $textConstraint)) {
+ if (!$installedRepo->findPackage($needle, $textConstraint)) {
 $defaultRepos = new CompositeRepository(RepositoryFactory::defaultRepos($this->getIO()));
 if ($match = $defaultRepos->findPackage($needle, $textConstraint)) {
-$repository->addRepository(new ArrayRepository(array(clone $match)));
+$installedRepo->addRepository(new InstalledArrayRepository(array(clone $match)));
 }
 }
 
@@ -126,7 +124,7 @@ $constraint = null;
 $recursive = $renderTree || $input->getOption(self::OPTION_RECURSIVE);
 
 
- $results = $repository->getDependents($needles, $constraint, $inverted, $recursive);
+ $results = $installedRepo->getDependents($needles, $constraint, $inverted, $recursive);
 if (empty($results)) {
 $extra = (null !== $constraint) ? sprintf(' in versions %smatching %s', $inverted ? 'not ' : '', $textConstraint) : '';
 $this->getIO()->writeError(sprintf(
@@ -184,7 +182,11 @@ $table = array_merge($rows, $table);
  $renderer = new Table($output);
 $renderer->setStyle('compact');
 $rendererStyle = $renderer->getStyle();
+if (method_exists($rendererStyle, 'setVerticalBorderChars')) {
+$rendererStyle->setVerticalBorderChars('');
+} else {
 $rendererStyle->setVerticalBorderChar('');
+}
 $rendererStyle->setCellRowContentFormat('%s  ');
 $renderer->setRows($table)->render();
 }

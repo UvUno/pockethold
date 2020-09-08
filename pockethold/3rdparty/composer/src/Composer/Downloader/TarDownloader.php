@@ -12,6 +12,8 @@
 
 namespace Composer\Downloader;
 
+use Composer\Package\PackageInterface;
+
 
 
 
@@ -22,7 +24,7 @@ class TarDownloader extends ArchiveDownloader
 
 
 
-protected function extract($file, $path)
+protected function extract(PackageInterface $package, $file, $path)
 {
 
  $archive = new \PharData($file);

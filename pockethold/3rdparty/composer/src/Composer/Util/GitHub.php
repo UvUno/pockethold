@@ -22,10 +22,14 @@ use Composer\Downloader\TransportException;
 
 class GitHub
 {
+
 protected $io;
+
 protected $config;
+
 protected $process;
-protected $remoteFilesystem;
+
+protected $httpDownloader;
 
 
 
@@ -35,12 +39,12 @@ protected $remoteFilesystem;
 
 
 
-public function __construct(IOInterface $io, Config $config, ProcessExecutor $process = null, RemoteFilesystem $remoteFilesystem = null)
+public function __construct(IOInterface $io, Config $config, ProcessExecutor $process = null, HttpDownloader $httpDownloader = null)
 {
 $this->io = $io;
 $this->config = $config;
-$this->process = $process ?: new ProcessExecutor;
-$this->remoteFilesystem = $remoteFilesystem ?: Factory::createRemoteFilesystem($this->io, $config);
+$this->process = $process ?: new ProcessExecutor($io);
+$this->httpDownloader = $httpDownloader ?: Factory::createHttpDownloader($this->io, $config);
 }
 
 
@@ -104,7 +108,7 @@ $this->io->setAuthentication($originUrl, $token, 'x-oauth-basic');
 try {
 $apiUrl = ('github.com' === $originUrl) ? 'api.github.com/' : $originUrl . '/api/v3/';
 
-$this->remoteFilesystem->getContents($originUrl, 'https://'. $apiUrl, false, array(
+$this->httpDownloader->get('https://'. $apiUrl, array(
 'retry-auth-failure' => false,
 ));
 } catch (TransportException $e) {

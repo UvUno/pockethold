@@ -51,7 +51,7 @@ if (!isset($this->rules[$this->currentType])) {
 return;
 }
 
-if ($this->currentOffset >= count($this->rules[$this->currentType])) {
+if ($this->currentOffset >= \count($this->rules[$this->currentType])) {
 $this->currentOffset = 0;
 
 do {
@@ -63,7 +63,7 @@ break;
 }
 
 $this->currentType = $this->types[$this->currentTypeOffset];
-} while (isset($this->types[$this->currentTypeOffset]) && !count($this->rules[$this->currentType]));
+} while (isset($this->types[$this->currentTypeOffset]) && !\count($this->rules[$this->currentType]));
 }
 }
 
@@ -83,7 +83,7 @@ break;
 }
 
 $this->currentType = $this->types[$this->currentTypeOffset];
-} while (isset($this->types[$this->currentTypeOffset]) && !count($this->rules[$this->currentType]));
+} while (isset($this->types[$this->currentTypeOffset]) && !\count($this->rules[$this->currentType]));
 }
 
 public function valid()

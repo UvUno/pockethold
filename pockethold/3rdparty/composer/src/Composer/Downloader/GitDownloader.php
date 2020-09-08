@@ -17,17 +17,35 @@ use Composer\IO\IOInterface;
 use Composer\Package\PackageInterface;
 use Composer\Util\Filesystem;
 use Composer\Util\Git as GitUtil;
+use Composer\Util\Url;
 use Composer\Util\Platform;
 use Composer\Util\ProcessExecutor;
+use Composer\Cache;
 
 
 
 
 class GitDownloader extends VcsDownloader implements DvcsDownloaderInterface
 {
-private $hasStashedChanges = false;
-private $hasDiscardedChanges = false;
+
+
+
+
+private $hasStashedChanges = array();
+
+
+
+
+private $hasDiscardedChanges = array();
+
+
+
 private $gitUtil;
+
+
+
+
+private $cachedPackages = array();
 
 public function __construct(IOInterface $io, Config $config, ProcessExecutor $process = null, Filesystem $fs = null)
 {
@@ -38,7 +56,28 @@ $this->gitUtil = new GitUtil($this->io, $this->config, $this->process, $this->fi
 
 
 
-public function doDownload(PackageInterface $package, $path, $url)
+protected function doDownload(PackageInterface $package, $path, $url, PackageInterface $prevPackage = null)
+{
+GitUtil::cleanEnv();
+
+$cachePath = $this->config->get('cache-vcs-dir').'/'.preg_replace('{[^a-z0-9.]}i', '-', $url).'/';
+$gitVersion = GitUtil::getVersion($this->process);
+
+
+ if ($gitVersion && version_compare($gitVersion, '2.3.0-rc0', '>=') && Cache::isUsable($cachePath)) {
+$this->io->writeError("  - Syncing <info>" . $package->getName() . "</info> (<comment>" . $package->getFullPrettyVersion() . "</comment>) into cache");
+$this->io->writeError(sprintf('    Cloning to cache at %s', ProcessExecutor::escape($cachePath)), true, IOInterface::DEBUG);
+$ref = $package->getSourceReference();
+if ($this->gitUtil->fetchRefOrSyncMirror($url, $cachePath, $ref) && is_dir($cachePath)) {
+$this->cachedPackages[$package->getId()][$ref] = true;
+}
+}
+}
+
+
+
+
+protected function doInstall(PackageInterface $package, $path, $url)
 {
 GitUtil::cleanEnv();
 $path = $this->normalizePath($path);
@@ -46,35 +85,30 @@ $cachePath = $this->config->get('cache-vcs-dir').'/'.preg_replace('{[^a-z0-9.]}i
 $ref = $package->getSourceReference();
 $flag = Platform::isWindows() ? '/D ' : '';
 
-
- $gitVersion = $this->gitUtil->getVersion();
-$msg = "Cloning ".$this->getShortHash($ref);
-
-$command = 'git clone --no-checkout %url% %path% && cd '.$flag.'%path% && git remote add composer %url% && git fetch composer';
-if ($gitVersion && version_compare($gitVersion, '2.3.0-rc0', '>=')) {
-$this->io->writeError('', true, IOInterface::DEBUG);
-$this->io->writeError(sprintf('    Cloning to cache at %s', ProcessExecutor::escape($cachePath)), true, IOInterface::DEBUG);
-try {
-$this->gitUtil->fetchRefOrSyncMirror($url, $cachePath, $ref);
-if (is_dir($cachePath)) {
+if (!empty($this->cachedPackages[$package->getId()][$ref])) {
+$msg = "Cloning ".$this->getShortHash($ref).' from cache';
 $command =
 'git clone --no-checkout %cachePath% %path% --dissociate --reference %cachePath% '
 . '&& cd '.$flag.'%path% '
-. '&& git remote set-url origin %url% && git remote add composer %url%';
-$msg = "Cloning ".$this->getShortHash($ref).' from cache';
+. '&& git remote set-url origin %sanitizedUrl% && git remote add composer %sanitizedUrl%';
+} else {
+$msg = "Cloning ".$this->getShortHash($ref);
+$command = 'git clone --no-checkout %url% %path% && cd '.$flag.'%path% && git remote add composer %url% && git fetch composer && git remote set-url origin %sanitizedUrl% && git remote set-url composer %sanitizedUrl%';
+if (getenv('COMPOSER_DISABLE_NETWORK')) {
+throw new \RuntimeException('The required git reference for '.$package->getName().' is not in cache and network is disabled, aborting');
 }
-} catch (\RuntimeException $e) {
 }
-}
+
 $this->io->writeError($msg);
 
 $commandCallable = function ($url) use ($path, $command, $cachePath) {
 return str_replace(
-array('%url%', '%path%', '%cachePath%'),
+array('%url%', '%path%', '%cachePath%', '%sanitizedUrl%'),
 array(
 ProcessExecutor::escape($url),
 ProcessExecutor::escape($path),
 ProcessExecutor::escape($cachePath),
+ProcessExecutor::escape(preg_replace('{://([^@]+?):(.+?)@}', '://', $url)),
 ),
 $command
 );
@@ -98,11 +132,50 @@ $package->setSourceReference($newRef);
 
 
 
-public function doUpdate(PackageInterface $initial, PackageInterface $target, $path, $url)
+protected function doUpdate(PackageInterface $initial, PackageInterface $target, $path, $url)
 {
 GitUtil::cleanEnv();
+$path = $this->normalizePath($path);
 if (!$this->hasMetadataRepository($path)) {
 throw new \RuntimeException('The .git directory is missing from '.$path.', see https://getcomposer.org/commit-deps for more information');
+}
+
+$cachePath = $this->config->get('cache-vcs-dir').'/'.preg_replace('{[^a-z0-9.]}i', '-', $url).'/';
+$ref = $target->getSourceReference();
+$flag = Platform::isWindows() ? '/D ' : '';
+
+if (!empty($this->cachedPackages[$target->getId()][$ref])) {
+$msg = "Checking out ".$this->getShortHash($ref).' from cache';
+$command = '(git rev-parse --quiet --verify %ref% || (git remote set-url composer %cachePath% && git fetch composer && git fetch --tags composer)) && git remote set-url composer %sanitizedUrl%';
+} else {
+$msg = "Checking out ".$this->getShortHash($ref);
+$command = '(git remote set-url composer %url% && git rev-parse --quiet --verify %ref% || (git fetch composer && git fetch --tags composer)) && git remote set-url composer %sanitizedUrl%';
+if (getenv('COMPOSER_DISABLE_NETWORK')) {
+throw new \RuntimeException('The required git reference for '.$target->getName().' is not in cache and network is disabled, aborting');
+}
+}
+
+$this->io->writeError($msg);
+
+$commandCallable = function ($url) use ($ref, $command, $cachePath) {
+return str_replace(
+array('%url%', '%ref%', '%cachePath%', '%sanitizedUrl%'),
+array(
+ProcessExecutor::escape($url),
+ProcessExecutor::escape($ref.'^{commit}'),
+ProcessExecutor::escape($cachePath),
+ProcessExecutor::escape(preg_replace('{://([^@]+?):(.+?)@}', '://', $url)),
+),
+$command
+);
+};
+
+$this->gitUtil->runCommand($commandCallable, $url, $path);
+if ($newRef = $this->updateToCommit($path, $ref, $target->getPrettyVersion(), $target->getReleaseDate())) {
+if ($target->getDistReference() === $target->getSourceReference()) {
+$target->setDistReference($newRef);
+}
+$target->setSourceReference($newRef);
 }
 
 $updateOriginUrl = false;
@@ -115,23 +188,6 @@ if ($originMatch['url'] === $composerMatch['url'] && $composerMatch['url'] !== $
 $updateOriginUrl = true;
 }
 }
-
-$ref = $target->getSourceReference();
-$this->io->writeError(" Checking out ".$this->getShortHash($ref));
-$command = 'git remote set-url composer %s && git rev-parse --quiet --verify %s || (git fetch composer && git fetch --tags composer)';
-
-$commandCallable = function ($url) use ($command, $ref) {
-return sprintf($command, ProcessExecutor::escape($url), ProcessExecutor::escape($ref.'^{commit}'));
-};
-
-$this->gitUtil->runCommand($commandCallable, $url, $path);
-if ($newRef = $this->updateToCommit($path, $ref, $target->getPrettyVersion(), $target->getReleaseDate())) {
-if ($target->getDistReference() === $target->getSourceReference()) {
-$target->setDistReference($newRef);
-}
-$target->setSourceReference($newRef);
-}
-
 if ($updateOriginUrl) {
 $this->updateOriginUrl($path, $target->getSourceUrl());
 }
@@ -260,7 +316,7 @@ return parent::cleanChanges($package, $path, $update);
 $changes = array_map(function ($elem) {
 return '    '.$elem;
 }, preg_split('{\s*\r?\n\s*}', $changes));
-$this->io->writeError('    <error>The package has modified files:</error>');
+$this->io->writeError('    <error>'.$package->getPrettyName().' has modified files:</error>');
 $this->io->writeError(array_slice($changes, 0, 10));
 if (count($changes) > 10) {
 $this->io->writeError('    <info>' . (count($changes) - 10) . ' more files modified, choose "v" to view the full list</info>');
@@ -315,15 +371,15 @@ break;
 protected function reapplyChanges($path)
 {
 $path = $this->normalizePath($path);
-if ($this->hasStashedChanges) {
-$this->hasStashedChanges = false;
+if (!empty($this->hasStashedChanges[$path])) {
+unset($this->hasStashedChanges[$path]);
 $this->io->writeError('    <info>Re-applying stashed changes</info>');
 if (0 !== $this->process->execute('git stash pop', $output, $path)) {
 throw new \RuntimeException("Failed to apply stashed changes:\n\n".$this->process->getErrorOutput());
 }
 }
 
-$this->hasDiscardedChanges = false;
+unset($this->hasDiscardedChanges[$path]);
 }
 
 
@@ -338,7 +394,7 @@ $this->hasDiscardedChanges = false;
 
 protected function updateToCommit($path, $reference, $branch, $date)
 {
-$force = $this->hasDiscardedChanges || $this->hasStashedChanges ? '-f ' : '';
+$force = !empty($this->hasDiscardedChanges[$path]) || !empty($this->hasStashedChanges[$path]) ? '-f ' : '';
 
 
  
@@ -361,7 +417,7 @@ if (!preg_match('{^[a-f0-9]{40}$}', $reference)
 ) {
 $command = sprintf('git checkout '.$force.'-B %s %s -- && git reset --hard %2$s --', ProcessExecutor::escape($branch), ProcessExecutor::escape('composer/'.$reference));
 if (0 === $this->process->execute($command, $output, $path)) {
-return;
+return null;
 }
 }
 
@@ -379,14 +435,14 @@ if (0 === $this->process->execute($command, $output, $path)
 ) {
 $command = sprintf('git reset --hard %s --', ProcessExecutor::escape($reference));
 if (0 === $this->process->execute($command, $output, $path)) {
-return;
+return null;
 }
 }
 }
 
 $command = sprintf($template, ProcessExecutor::escape($gitRef));
 if (0 === $this->process->execute($command, $output, $path)) {
-return;
+return null;
 }
 
 
@@ -394,7 +450,7 @@ return;
 $this->io->writeError('    <warning>'.$reference.' is gone (history was rewritten?)</warning>');
 }
 
-throw new \RuntimeException(GitUtil::sanitizeUrl('Failed to execute ' . $command . "\n\n" . $this->process->getErrorOutput()));
+throw new \RuntimeException(Url::sanitize('Failed to execute ' . $command . "\n\n" . $this->process->getErrorOutput()));
 }
 
 protected function updateOriginUrl($path, $url)
@@ -423,7 +479,7 @@ $this->process->execute($cmd, $ignoredOutput, $path);
 protected function getCommitLogs($fromReference, $toReference, $path)
 {
 $path = $this->normalizePath($path);
-$command = sprintf('git log %s..%s --pretty=format:"%%h - %%an: %%s"', ProcessExecutor::escape($fromReference), ProcessExecutor::escape($toReference));
+$command = sprintf('git log %s..%s --pretty=format:"%%h - %%an: %%s"'.GitUtil::getNoShowSignatureFlag($this->process), ProcessExecutor::escape($fromReference), ProcessExecutor::escape($toReference));
 
 if (0 !== $this->process->execute($command, $output, $path)) {
 throw new \RuntimeException('Failed to execute ' . $command . "\n\n" . $this->process->getErrorOutput());
@@ -439,11 +495,11 @@ return $output;
 protected function discardChanges($path)
 {
 $path = $this->normalizePath($path);
-if (0 !== $this->process->execute('git reset --hard', $output, $path)) {
+if (0 !== $this->process->execute('git clean -df && git reset --hard', $output, $path)) {
 throw new \RuntimeException("Could not reset changes\n\n:".$this->process->getErrorOutput());
 }
 
-$this->hasDiscardedChanges = true;
+$this->hasDiscardedChanges[$path] = true;
 }
 
 
@@ -457,7 +513,7 @@ if (0 !== $this->process->execute('git stash --include-untracked', $output, $pat
 throw new \RuntimeException("Could not stash changes\n\n:".$this->process->getErrorOutput());
 }
 
-$this->hasStashedChanges = true;
+$this->hasStashedChanges[$path] = true;
 }
 
 

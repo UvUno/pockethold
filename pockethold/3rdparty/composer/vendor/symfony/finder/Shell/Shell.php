@@ -54,7 +54,7 @@ return $this->type;
 
 public function testCommand($command)
 {
-if (!function_exists('exec')) {
+if (!\function_exists('exec')) {
 return false;
 }
 
@@ -68,7 +68,7 @@ $command = escapeshellcmd($command);
 
 exec($testCommand.$command, $output, $code);
 
-return 0 === $code && count($output) > 0;
+return 0 === $code && \count($output) > 0;
 }
 
 

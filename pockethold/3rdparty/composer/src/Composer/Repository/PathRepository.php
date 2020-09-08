@@ -20,6 +20,9 @@ use Composer\Package\Version\VersionGuesser;
 use Composer\Package\Version\VersionParser;
 use Composer\Util\Platform;
 use Composer\Util\ProcessExecutor;
+use Composer\Util\Filesystem;
+use Composer\Util\Url;
+use Composer\Util\Git as GitUtil;
 
 
 
@@ -107,8 +110,17 @@ $this->process = new ProcessExecutor($io);
 $this->versionGuesser = new VersionGuesser($config, $this->process, new VersionParser());
 $this->repoConfig = $repoConfig;
 $this->options = isset($repoConfig['options']) ? $repoConfig['options'] : array();
+if (!isset($this->options['relative'])) {
+$filesystem = new Filesystem();
+$this->options['relative'] = !$filesystem->isAbsolutePath($this->url);
+}
 
 parent::__construct();
+}
+
+public function getRepoName()
+{
+return 'path repo ('.Url::sanitize($this->repoConfig['url']).')';
 }
 
 public function getRepoConfig()
@@ -125,7 +137,24 @@ protected function initialize()
 {
 parent::initialize();
 
-foreach ($this->getUrlMatches() as $url) {
+$urlMatches = $this->getUrlMatches();
+
+if (empty($urlMatches)) {
+if (preg_match('{[*{}]}', $this->url)) {
+$url = $this->url;
+while (preg_match('{[*{}]}', $url)) {
+$url = dirname($url);
+}
+
+ if (is_dir($url)) {
+return;
+}
+}
+
+throw new \RuntimeException('The `url` supplied for the path (' . $this->url . ') repository does not exist');
+}
+
+foreach ($urlMatches as $url) {
 $path = realpath($url) . DIRECTORY_SEPARATOR;
 $composerFilePath = $path.'composer.json';
 
@@ -153,15 +182,26 @@ $package['version'] = $rootVersion;
 }
 }
 
-if (!isset($package['version'])) {
-$versionData = $this->versionGuesser->guessVersion($package, $path);
-$package['version'] = $versionData['pretty_version'] ?: 'dev-master';
-}
-
 $output = '';
-if (is_dir($path . DIRECTORY_SEPARATOR . '.git') && 0 === $this->process->execute('git log -n1 --pretty=%H', $output, $path)) {
+if (is_dir($path . DIRECTORY_SEPARATOR . '.git') && 0 === $this->process->execute('git log -n1 --pretty=%H'.GitUtil::getNoShowSignatureFlag($this->process), $output, $path)) {
 $package['dist']['reference'] = trim($output);
 }
+
+if (!isset($package['version'])) {
+$versionData = $this->versionGuesser->guessVersion($package, $path);
+if (is_array($versionData) && $versionData['pretty_version']) {
+
+ if (!empty($versionData['feature_pretty_version'])) {
+$package['version'] = $versionData['feature_pretty_version'];
+$this->addPackage($this->loader->load($package));
+}
+
+$package['version'] = $versionData['pretty_version'];
+} else {
+$package['version'] = 'dev-master';
+}
+}
+
 $package = $this->loader->load($package);
 $this->addPackage($package);
 }

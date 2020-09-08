@@ -42,7 +42,7 @@ public function __construct($name, $mode = null, $description = '', $default = n
 {
 if (null === $mode) {
 $mode = self::OPTIONAL;
-} elseif (!is_int($mode) || $mode > 7 || $mode < 1) {
+} elseif (!\is_int($mode) || $mode > 7 || $mode < 1) {
 throw new InvalidArgumentException(sprintf('Argument mode "%s" is not valid.', $mode));
 }
 
@@ -99,7 +99,7 @@ throw new LogicException('Cannot set a default value except for InputArgument::O
 if ($this->isArray()) {
 if (null === $default) {
 $default = array();
-} elseif (!is_array($default)) {
+} elseif (!\is_array($default)) {
 throw new LogicException('A default value for an array argument must be an array.');
 }
 }

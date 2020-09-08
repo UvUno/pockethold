@@ -13,6 +13,8 @@
 namespace Composer\Repository;
 
 use Composer\Package\PackageInterface;
+use Composer\Package\BasePackage;
+use Composer\Semver\Constraint\ConstraintInterface;
 
 
 
@@ -70,5 +72,45 @@ public function getPackages();
 
 
 
-public function search($query, $mode = 0);
+
+
+
+
+
+
+
+public function loadPackages(array $packageNameMap, array $acceptableStabilities, array $stabilityFlags);
+
+
+
+
+
+
+
+
+
+
+
+public function search($query, $mode = 0, $type = null);
+
+
+
+
+
+
+
+
+
+
+
+public function getProviders($packageName);
+
+
+
+
+
+
+
+
+public function getRepoName();
 }

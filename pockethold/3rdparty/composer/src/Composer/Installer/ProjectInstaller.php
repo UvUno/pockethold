@@ -29,11 +29,11 @@ private $installPath;
 private $downloadManager;
 private $filesystem;
 
-public function __construct($installPath, DownloadManager $dm)
+public function __construct($installPath, DownloadManager $dm, Filesystem $fs)
 {
 $this->installPath = rtrim(strtr($installPath, '\\', '/'), '/').'/';
 $this->downloadManager = $dm;
-$this->filesystem = new Filesystem;
+$this->filesystem = $fs;
 }
 
 
@@ -58,7 +58,7 @@ return false;
 
 
 
-public function install(InstalledRepositoryInterface $repo, PackageInterface $package)
+public function download(PackageInterface $package, PackageInterface $prevPackage = null)
 {
 $installPath = $this->installPath;
 if (file_exists($installPath) && !$this->filesystem->isDirEmpty($installPath)) {
@@ -67,7 +67,32 @@ throw new \InvalidArgumentException("Project directory $installPath is not empty
 if (!is_dir($installPath)) {
 mkdir($installPath, 0777, true);
 }
-$this->downloadManager->download($package, $installPath);
+
+return $this->downloadManager->download($package, $installPath, $prevPackage);
+}
+
+
+
+
+public function prepare($type, PackageInterface $package, PackageInterface $prevPackage = null)
+{
+return $this->downloadManager->prepare($type, $package, $this->installPath, $prevPackage);
+}
+
+
+
+
+public function cleanup($type, PackageInterface $package, PackageInterface $prevPackage = null)
+{
+return $this->downloadManager->cleanup($type, $package, $this->installPath, $prevPackage);
+}
+
+
+
+
+public function install(InstalledRepositoryInterface $repo, PackageInterface $package)
+{
+return $this->downloadManager->install($package, $this->installPath);
 }
 
 

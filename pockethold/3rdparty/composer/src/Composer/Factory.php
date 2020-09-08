@@ -17,13 +17,15 @@ use Composer\Json\JsonFile;
 use Composer\IO\IOInterface;
 use Composer\Package\Archiver;
 use Composer\Package\Version\VersionGuesser;
+use Composer\Package\RootPackageInterface;
 use Composer\Repository\RepositoryManager;
 use Composer\Repository\RepositoryFactory;
 use Composer\Repository\WritableRepositoryInterface;
 use Composer\Util\Filesystem;
 use Composer\Util\Platform;
 use Composer\Util\ProcessExecutor;
-use Composer\Util\RemoteFilesystem;
+use Composer\Util\HttpDownloader;
+use Composer\Util\Loop;
 use Composer\Util\Silencer;
 use Composer\Plugin\PluginEvents;
 use Composer\EventDispatcher\Event;
@@ -67,18 +69,29 @@ return rtrim(strtr(getenv('APPDATA'), '\\', '/'), '/') . '/Composer';
 }
 
 $userDir = self::getUserDir();
-if (is_dir($userDir . '/.composer')) {
-return $userDir . '/.composer';
-}
+$dirs = array();
 
 if (self::useXdg()) {
 
- $xdgConfig = getenv('XDG_CONFIG_HOME') ?: $userDir . '/.config';
-
-return $xdgConfig . '/composer';
+ $xdgConfig = getenv('XDG_CONFIG_HOME');
+if (!$xdgConfig) {
+$xdgConfig = $userDir . '/.config';
 }
 
-return $userDir . '/.composer';
+$dirs[] = $xdgConfig . '/composer';
+}
+
+$dirs[] = $userDir . '/.composer';
+
+
+ foreach ($dirs as $dir) {
+if (is_dir($dir)) {
+return $dir;
+}
+}
+
+
+ return $dirs[0];
 }
 
 
@@ -164,6 +177,16 @@ $config->merge(array('config' => array(
 'data-dir' => self::getDataDir($home),
 )));
 
+
+ $file = new JsonFile($config->get('home').'/config.json');
+if ($file->exists()) {
+if ($io && $io->isDebug()) {
+$io->writeError('Loading config file ' . $file->getPath());
+}
+$config->merge($file->read());
+}
+$config->setConfigSource(new JsonConfigSource($file));
+
 $htaccessProtect = (bool) $config->get('htaccess-protect');
 if ($htaccessProtect) {
 
@@ -179,16 +202,6 @@ Silencer::call('file_put_contents', $dir . '/.htaccess', 'Deny from all');
 }
 }
 }
-
-
- $file = new JsonFile($config->get('home').'/config.json');
-if ($file->exists()) {
-if ($io && $io->isDebug()) {
-$io->writeError('Loading config file ' . $file->getPath());
-}
-$config->merge($file->read());
-}
-$config->setConfigSource(new JsonConfigSource($file));
 
 
  $file = new JsonFile($config->get('home').'/auth.json');
@@ -220,6 +233,13 @@ return $config;
 public static function getComposerFile()
 {
 return trim(getenv('COMPOSER')) ?: './composer.json';
+}
+
+public static function getLockFile($composerFile)
+{
+return "json" === pathinfo($composerFile, PATHINFO_EXTENSION)
+? substr($composerFile, 0, -4).'lock'
+: $composerFile . '.lock';
 }
 
 public static function createAdditionalStyles()
@@ -325,18 +345,18 @@ if ($fullLoad) {
  $io->loadConfiguration($config);
 }
 
-$rfs = self::createRemoteFilesystem($io, $config);
+$httpDownloader = self::createHttpDownloader($io, $config);
+$process = new ProcessExecutor($io);
+$loop = new Loop($httpDownloader, $process);
+$composer->setLoop($loop);
 
 
- $dispatcher = new EventDispatcher($composer, $io);
+ $dispatcher = new EventDispatcher($composer, $io, $process);
 $composer->setEventDispatcher($dispatcher);
 
 
- $rm = RepositoryFactory::manager($io, $config, $dispatcher, $rfs);
+ $rm = RepositoryFactory::manager($io, $config, $httpDownloader, $dispatcher, $process);
 $composer->setRepositoryManager($rm);
-
-
- $this->addLocalRepository($io, $rm, $vendorDir);
 
 
  
@@ -346,18 +366,21 @@ $localConfig['version'] = '1.0.0';
 
 
  $parser = new VersionParser;
-$guesser = new VersionGuesser($config, new ProcessExecutor($io), $parser);
-$loader = new Package\Loader\RootPackageLoader($rm, $config, $parser, $guesser);
+$guesser = new VersionGuesser($config, $process, $parser);
+$loader = $this->loadRootPackage($rm, $config, $parser, $guesser, $io);
 $package = $loader->load($localConfig, 'Composer\Package\RootPackage', $cwd);
 $composer->setPackage($package);
 
 
- $im = $this->createInstallationManager();
+ $this->addLocalRepository($io, $rm, $vendorDir, $package);
+
+
+ $im = $this->createInstallationManager($loop, $io, $dispatcher);
 $composer->setInstallationManager($im);
 
 if ($fullLoad) {
 
- $dm = $this->createDownloadManager($io, $config, $dispatcher, $rfs);
+ $dm = $this->createDownloadManager($io, $config, $httpDownloader, $process, $dispatcher);
 $composer->setDownloadManager($dm);
 
 
@@ -365,12 +388,12 @@ $composer->setDownloadManager($dm);
 $composer->setAutoloadGenerator($generator);
 
 
- $am = $this->createArchiveManager($config, $dm);
+ $am = $this->createArchiveManager($config, $dm, $loop);
 $composer->setArchiveManager($am);
 }
 
 
- $this->createDefaultInstallers($im, $composer, $io);
+ $this->createDefaultInstallers($im, $composer, $io, $process);
 
 if ($fullLoad) {
 $globalComposer = null;
@@ -386,11 +409,9 @@ $pm->loadInstalledPlugins();
 
 
  if ($fullLoad && isset($composerFile)) {
-$lockFile = "json" === pathinfo($composerFile, PATHINFO_EXTENSION)
-? substr($composerFile, 0, -4).'lock'
-: $composerFile . '.lock';
+$lockFile = self::getLockFile($composerFile);
 
-$locker = new Package\Locker($io, new JsonFile($lockFile, null, $io), $rm, $im, file_get_contents($composerFile));
+$locker = new Package\Locker($io, new JsonFile($lockFile, null, $io), $im, file_get_contents($composerFile), $process);
 $composer->setLocker($locker);
 }
 
@@ -424,9 +445,9 @@ return $factory->createGlobalComposer($io, static::createConfig($io), $disablePl
 
 
 
-protected function addLocalRepository(IOInterface $io, RepositoryManager $rm, $vendorDir)
+protected function addLocalRepository(IOInterface $io, RepositoryManager $rm, $vendorDir, RootPackageInterface $rootPackage)
 {
-$rm->setLocalRepository(new Repository\InstalledFilesystemRepository(new JsonFile($vendorDir.'/composer/installed.json', null, $io)));
+$rm->setLocalRepository(new Repository\InstalledFilesystemRepository(new JsonFile($vendorDir.'/composer/installed.json', null, $io), true, $rootPackage));
 }
 
 
@@ -451,14 +472,16 @@ return $composer;
 
 
 
-public function createDownloadManager(IOInterface $io, Config $config, EventDispatcher $eventDispatcher = null, RemoteFilesystem $rfs = null)
+public function createDownloadManager(IOInterface $io, Config $config, HttpDownloader $httpDownloader, ProcessExecutor $process, EventDispatcher $eventDispatcher = null)
 {
 $cache = null;
 if ($config->get('cache-files-ttl') > 0) {
 $cache = new Cache($io, $config->get('cache-files-dir'), 'a-z0-9_./');
 }
 
-$dm = new Downloader\DownloadManager($io);
+$fs = new Filesystem($process);
+
+$dm = new Downloader\DownloadManager($io, false, $fs);
 switch ($preferred = $config->get('preferred-install')) {
 case 'dist':
 $dm->setPreferDist(true);
@@ -476,22 +499,19 @@ if (is_array($preferred)) {
 $dm->setPreferences($preferred);
 }
 
-$executor = new ProcessExecutor($io);
-$fs = new Filesystem($executor);
-
-$dm->setDownloader('git', new Downloader\GitDownloader($io, $config, $executor, $fs));
-$dm->setDownloader('svn', new Downloader\SvnDownloader($io, $config, $executor, $fs));
-$dm->setDownloader('fossil', new Downloader\FossilDownloader($io, $config, $executor, $fs));
-$dm->setDownloader('hg', new Downloader\HgDownloader($io, $config, $executor, $fs));
-$dm->setDownloader('perforce', new Downloader\PerforceDownloader($io, $config));
-$dm->setDownloader('zip', new Downloader\ZipDownloader($io, $config, $eventDispatcher, $cache, $executor, $rfs));
-$dm->setDownloader('rar', new Downloader\RarDownloader($io, $config, $eventDispatcher, $cache, $executor, $rfs));
-$dm->setDownloader('tar', new Downloader\TarDownloader($io, $config, $eventDispatcher, $cache, $rfs));
-$dm->setDownloader('gzip', new Downloader\GzipDownloader($io, $config, $eventDispatcher, $cache, $executor, $rfs));
-$dm->setDownloader('xz', new Downloader\XzDownloader($io, $config, $eventDispatcher, $cache, $executor, $rfs));
-$dm->setDownloader('phar', new Downloader\PharDownloader($io, $config, $eventDispatcher, $cache, $rfs));
-$dm->setDownloader('file', new Downloader\FileDownloader($io, $config, $eventDispatcher, $cache, $rfs));
-$dm->setDownloader('path', new Downloader\PathDownloader($io, $config, $eventDispatcher, $cache, $rfs));
+$dm->setDownloader('git', new Downloader\GitDownloader($io, $config, $process, $fs));
+$dm->setDownloader('svn', new Downloader\SvnDownloader($io, $config, $process, $fs));
+$dm->setDownloader('fossil', new Downloader\FossilDownloader($io, $config, $process, $fs));
+$dm->setDownloader('hg', new Downloader\HgDownloader($io, $config, $process, $fs));
+$dm->setDownloader('perforce', new Downloader\PerforceDownloader($io, $config, $process, $fs));
+$dm->setDownloader('zip', new Downloader\ZipDownloader($io, $config, $httpDownloader, $eventDispatcher, $cache, $fs, $process));
+$dm->setDownloader('rar', new Downloader\RarDownloader($io, $config, $httpDownloader, $eventDispatcher, $cache, $fs, $process));
+$dm->setDownloader('tar', new Downloader\TarDownloader($io, $config, $httpDownloader, $eventDispatcher, $cache, $fs, $process));
+$dm->setDownloader('gzip', new Downloader\GzipDownloader($io, $config, $httpDownloader, $eventDispatcher, $cache, $fs, $process));
+$dm->setDownloader('xz', new Downloader\XzDownloader($io, $config, $httpDownloader, $eventDispatcher, $cache, $fs, $process));
+$dm->setDownloader('phar', new Downloader\PharDownloader($io, $config, $httpDownloader, $eventDispatcher, $cache, $fs, $process));
+$dm->setDownloader('file', new Downloader\FileDownloader($io, $config, $httpDownloader, $eventDispatcher, $cache, $fs, $process));
+$dm->setDownloader('path', new Downloader\PathDownloader($io, $config, $httpDownloader, $eventDispatcher, $cache, $fs, $process));
 
 return $dm;
 }
@@ -501,15 +521,9 @@ return $dm;
 
 
 
-public function createArchiveManager(Config $config, Downloader\DownloadManager $dm = null)
+public function createArchiveManager(Config $config, Downloader\DownloadManager $dm, Loop $loop)
 {
-if (null === $dm) {
-$io = new IO\NullIO();
-$io->loadConfiguration($config);
-$dm = $this->createDownloadManager($io, $config);
-}
-
-$am = new Archiver\ArchiveManager($dm);
+$am = new Archiver\ArchiveManager($dm, $loop);
 $am->addArchiver(new Archiver\ZipArchiver);
 $am->addArchiver(new Archiver\PharArchiver);
 
@@ -531,9 +545,9 @@ return new Plugin\PluginManager($io, $composer, $globalComposer, $disablePlugins
 
 
 
-protected function createInstallationManager()
+public function createInstallationManager(Loop $loop, IOInterface $io, EventDispatcher $eventDispatcher = null)
 {
-return new Installer\InstallationManager();
+return new Installer\InstallationManager($loop, $io, $eventDispatcher);
 }
 
 
@@ -541,12 +555,14 @@ return new Installer\InstallationManager();
 
 
 
-protected function createDefaultInstallers(Installer\InstallationManager $im, Composer $composer, IOInterface $io)
+protected function createDefaultInstallers(Installer\InstallationManager $im, Composer $composer, IOInterface $io, ProcessExecutor $process = null)
 {
-$im->addInstaller(new Installer\LibraryInstaller($io, $composer, null));
-$im->addInstaller(new Installer\PearInstaller($io, $composer, 'pear-library'));
-$im->addInstaller(new Installer\PluginInstaller($io, $composer));
-$im->addInstaller(new Installer\MetapackageInstaller());
+$fs = new Filesystem($process);
+$binaryInstaller = new Installer\BinaryInstaller($io, rtrim($composer->getConfig()->get('bin-dir'), '/'), $composer->getConfig()->get('bin-compat'), $fs);
+
+$im->addInstaller(new Installer\LibraryInstaller($io, $composer, null, $fs, $binaryInstaller));
+$im->addInstaller(new Installer\PluginInstaller($io, $composer, $fs, $binaryInstaller));
+$im->addInstaller(new Installer\MetapackageInstaller($io));
 }
 
 
@@ -560,6 +576,11 @@ if (!$im->isPackageInstalled($repo, $package)) {
 $repo->removePackage($package);
 }
 }
+}
+
+protected function loadRootPackage(RepositoryManager $rm, Config $config, VersionParser $parser, VersionGuesser $guesser, IOInterface $io)
+{
+return new Package\Loader\RootPackageLoader($rm, $config, $parser, $guesser, $io);
 }
 
 
@@ -582,13 +603,13 @@ return $factory->createComposer($io, $config, $disablePlugins);
 
 
 
-public static function createRemoteFilesystem(IOInterface $io, Config $config = null, $options = array())
+public static function createHttpDownloader(IOInterface $io, Config $config, $options = array())
 {
 static $warned = false;
 $disableTls = false;
 if ($config && $config->get('disable-tls') === true) {
 if (!$warned) {
-$io->write('<warning>You are running Composer with SSL/TLS protection disabled.</warning>');
+$io->writeError('<warning>You are running Composer with SSL/TLS protection disabled.</warning>');
 }
 $warned = true;
 $disableTls = true;
@@ -596,18 +617,18 @@ $disableTls = true;
 throw new Exception\NoSslException('The openssl extension is required for SSL/TLS protection but is not available. '
 . 'If you can not enable the openssl extension, you can disable this error, at your own risk, by setting the \'disable-tls\' option to true.');
 }
-$remoteFilesystemOptions = array();
+$httpDownloaderOptions = array();
 if ($disableTls === false) {
 if ($config && $config->get('cafile')) {
-$remoteFilesystemOptions['ssl']['cafile'] = $config->get('cafile');
+$httpDownloaderOptions['ssl']['cafile'] = $config->get('cafile');
 }
 if ($config && $config->get('capath')) {
-$remoteFilesystemOptions['ssl']['capath'] = $config->get('capath');
+$httpDownloaderOptions['ssl']['capath'] = $config->get('capath');
 }
-$remoteFilesystemOptions = array_replace_recursive($remoteFilesystemOptions, $options);
+$httpDownloaderOptions = array_replace_recursive($httpDownloaderOptions, $options);
 }
 try {
-$remoteFilesystem = new RemoteFilesystem($io, $config, $remoteFilesystemOptions, $disableTls);
+$httpDownloader = new HttpDownloader($io, $config, $httpDownloaderOptions, $disableTls);
 } catch (TransportException $e) {
 if (false !== strpos($e->getMessage(), 'cafile')) {
 $io->write('<error>Unable to locate a valid CA certificate file. You must set a valid \'cafile\' option.</error>');
@@ -620,7 +641,7 @@ $io->write('<error>You can disable this error, at your own risk, by setting the 
 throw $e;
 }
 
-return $remoteFilesystem;
+return $httpDownloader;
 }
 
 
@@ -632,6 +653,10 @@ foreach (array_keys($_SERVER) as $key) {
 if (substr($key, 0, 4) === 'XDG_') {
 return true;
 }
+}
+
+if (is_dir('/etc/xdg')) {
+return true;
 }
 
 return false;

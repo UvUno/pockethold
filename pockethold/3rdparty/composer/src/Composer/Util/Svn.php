@@ -79,7 +79,7 @@ public function __construct($url, IOInterface $io, Config $config, ProcessExecut
 $this->url = $url;
 $this->io = $io;
 $this->config = $config;
-$this->process = $process ?: new ProcessExecutor;
+$this->process = $process ?: new ProcessExecutor($io);
 }
 
 public static function cleanEnv()
@@ -304,7 +304,7 @@ if (false === $this->createAuthFromConfig()) {
 $this->createAuthFromUrl();
 }
 
-return $this->hasAuth;
+return (bool) $this->hasAuth;
 }
 
 

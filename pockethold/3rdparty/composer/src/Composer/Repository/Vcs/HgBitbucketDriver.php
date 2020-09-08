@@ -53,7 +53,7 @@ return $this->rootIdentifier;
 
 public static function supports(IOInterface $io, Config $config, $url, $deep = false)
 {
-if (!preg_match('#^https?://bitbucket\.org/([^/]+)/([^/]+)/?$#', $url)) {
+if (!preg_match('#^https?://bitbucket\.org/([^/]+)/([^/]+)/?$#i', $url)) {
 return false;
 }
 
@@ -75,8 +75,8 @@ $this->fallbackDriver = new HgDriver(
 array('url' => $url),
 $this->io,
 $this->config,
-$this->process,
-$this->remoteFilesystem
+$this->httpDownloader,
+$this->process
 );
 $this->fallbackDriver->initialize();
 }

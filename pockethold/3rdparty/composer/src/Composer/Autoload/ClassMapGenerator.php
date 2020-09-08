@@ -58,12 +58,14 @@ file_put_contents($file, sprintf('<?php return %s;', var_export($maps, true)));
 
 
 
-public static function createMap($path, $blacklist = null, IOInterface $io = null, $namespace = null)
+
+public static function createMap($path, $excluded = null, IOInterface $io = null, $namespace = null, $autoloadType = null, &$scannedFiles = array())
 {
+$basePath = $path;
 if (is_string($path)) {
 if (is_file($path)) {
 $path = array(new \SplFileInfo($path));
-} elseif (is_dir($path)) {
+} elseif (is_dir($path) || strpos($path, '*') !== false) {
 $path = Finder::create()->files()->followLinks()->name('/\.(php|inc|hh)$/')->in($path);
 } else {
 throw new \RuntimeException(
@@ -71,6 +73,8 @@ throw new \RuntimeException(
 '" which does not appear to be a file nor a folder'
 );
 }
+} elseif (null !== $autoloadType) {
+throw new \RuntimeException('Path must be a string when specifying an autoload type');
 }
 
 $map = array();
@@ -90,20 +94,39 @@ $filePath = $filesystem->normalizePath($filePath);
 $filePath = preg_replace('{[\\\\/]{2,}}', '/', $filePath);
 }
 
+$realPath = realpath($filePath);
 
- if ($blacklist && preg_match($blacklist, strtr(realpath($filePath), '\\', '/'))) {
+
+ 
+ if (isset($scannedFiles[$realPath])) {
 continue;
 }
 
- if ($blacklist && preg_match($blacklist, strtr($filePath, '\\', '/'))) {
+
+ if ($excluded && preg_match($excluded, strtr($realPath, '\\', '/'))) {
+continue;
+}
+
+ if ($excluded && preg_match($excluded, strtr($filePath, '\\', '/'))) {
 continue;
 }
 
 $classes = self::findClasses($filePath);
+if (null !== $autoloadType) {
+$classes = self::filterByNamespace($classes, $filePath, $namespace, $autoloadType, $basePath, $io);
+
+
+ if ($classes) {
+$scannedFiles[$realPath] = true;
+}
+} else {
+
+ $scannedFiles[$realPath] = true;
+}
 
 foreach ($classes as $class) {
 
- if (null !== $namespace && 0 !== strpos($class, $namespace)) {
+ if (null === $autoloadType && null !== $namespace && '' !== $namespace && 0 !== strpos($class, $namespace)) {
 continue;
 }
 
@@ -119,6 +142,68 @@ $io->writeError(
 }
 
 return $map;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+private static function filterByNamespace($classes, $filePath, $baseNamespace, $namespaceType, $basePath, $io)
+{
+$validClasses = array();
+$rejectedClasses = array();
+
+$realSubPath = substr($filePath, strlen($basePath) + 1);
+$realSubPath = substr($realSubPath, 0, strrpos($realSubPath, '.'));
+
+foreach ($classes as $class) {
+
+ if ('' !== $baseNamespace && 0 !== strpos($class, $baseNamespace)) {
+continue;
+}
+
+ if ('psr-0' === $namespaceType) {
+$namespaceLength = strrpos($class, '\\');
+if (false !== $namespaceLength) {
+$namespace = substr($class, 0, $namespaceLength + 1);
+$className = substr($class, $namespaceLength + 1);
+$subPath = str_replace('\\', DIRECTORY_SEPARATOR, $namespace)
+. str_replace('_', DIRECTORY_SEPARATOR, $className);
+}
+else {
+$subPath = str_replace('_', DIRECTORY_SEPARATOR, $class);
+}
+} elseif ('psr-4' === $namespaceType) {
+$subNamespace = ('' !== $baseNamespace) ? substr($class, strlen($baseNamespace)) : $class;
+$subPath = str_replace('\\', DIRECTORY_SEPARATOR, $subNamespace);
+} else {
+throw new \RuntimeException("namespaceType must be psr-0 or psr-4, $namespaceType given");
+}
+if ($subPath === $realSubPath) {
+$validClasses[] = $class;
+} else {
+$rejectedClasses[] = $class;
+}
+}
+
+ if (empty($validClasses)) {
+foreach ($rejectedClasses as $class) {
+if ($io) {
+$io->writeError("<warning>Class $class located in ".preg_replace('{^'.preg_quote(getcwd()).'}', '.', $filePath, 1)." does not comply with $namespaceType autoloading standard. Skipping.</warning>");
+}
+}
+
+return array();
+}
+
+return $validClasses;
 }
 
 
@@ -162,7 +247,7 @@ return array();
 }
 
 
- $contents = preg_replace('{<<<\s*(\'?)(\w+)\\1(?:\r\n|\n|\r)(?:.*?)(?:\r\n|\n|\r)\\2(?=\r\n|\n|\r|;)}s', 'null', $contents);
+ $contents = preg_replace('{<<<[ \t]*([\'"]?)(\w+)\\1(?:\r\n|\n|\r)(?:.*?)(?:\r\n|\n|\r)(?:\s*)\\2(?=\s+|[;,.)])}s', 'null', $contents);
 
  $contents = preg_replace('{"[^"\\\\]*+(\\\\.[^"\\\\]*+)*+"|\'[^\'\\\\]*+(\\\\.[^\'\\\\]*+)*+\'}s', 'null', $contents);
 
@@ -173,7 +258,7 @@ return array();
 }
 }
 
- $contents = preg_replace('{\?>.+<\?}s', '?><?', $contents);
+ $contents = preg_replace('{\?>(?:[^<]++|<(?!\?))*+<\?}s', '?><?', $contents);
 
  $pos = strrpos($contents, '?>');
 if (false !== $pos && false === strpos(substr($contents, $pos), '<?')) {

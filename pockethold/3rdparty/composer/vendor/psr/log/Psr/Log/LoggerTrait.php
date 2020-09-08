@@ -136,5 +136,7 @@ $this->log(LogLevel::DEBUG, $message, $context);
 
 
 
+
+
 abstract public function log($level, $message, array $context = array());
 }

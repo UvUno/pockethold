@@ -15,7 +15,7 @@ namespace Composer\Json;
 use JsonSchema\Validator;
 use Seld\JsonLint\JsonParser;
 use Seld\JsonLint\ParsingException;
-use Composer\Util\RemoteFilesystem;
+use Composer\Util\HttpDownloader;
 use Composer\IO\IOInterface;
 use Composer\Downloader\TransportException;
 
@@ -34,8 +34,10 @@ const JSON_UNESCAPED_SLASHES = 64;
 const JSON_PRETTY_PRINT = 128;
 const JSON_UNESCAPED_UNICODE = 256;
 
+const COMPOSER_SCHEMA_PATH = '/../../../res/composer-schema.json';
+
 private $path;
-private $rfs;
+private $httpDownloader;
 private $io;
 
 
@@ -46,14 +48,14 @@ private $io;
 
 
 
-public function __construct($path, RemoteFilesystem $rfs = null, IOInterface $io = null)
+public function __construct($path, HttpDownloader $httpDownloader = null, IOInterface $io = null)
 {
 $this->path = $path;
 
-if (null === $rfs && preg_match('{^https?://}i', $path)) {
-throw new \InvalidArgumentException('http urls require a RemoteFilesystem instance to be passed');
+if (null === $httpDownloader && preg_match('{^https?://}i', $path)) {
+throw new \InvalidArgumentException('http urls require a HttpDownloader instance to be passed');
 }
-$this->rfs = $rfs;
+$this->httpDownloader = $httpDownloader;
 $this->io = $io;
 }
 
@@ -84,8 +86,8 @@ return is_file($this->path);
 public function read()
 {
 try {
-if ($this->rfs) {
-$json = $this->rfs->getContents($this->path, $this->path, false);
+if ($this->httpDownloader) {
+$json = $this->httpDownloader->get($this->path)->getBody();
 } else {
 if ($this->io && $this->io->isDebug()) {
 $this->io->writeError('Reading ' . $this->path);
@@ -110,11 +112,17 @@ return static::parseJson($json, $this->path);
 
 public function write(array $hash, $options = 448)
 {
+if ($this->path === 'php://memory') {
+file_put_contents($this->path, static::encode($hash, $options));
+
+return;
+}
+
 $dir = dirname($this->path);
 if (!is_dir($dir)) {
 if (file_exists($dir)) {
 throw new \UnexpectedValueException(
-$dir.' exists and is not a directory.'
+realpath($dir).' exists and is not a directory.'
 );
 }
 if (!@mkdir($dir, 0777, true)) {
@@ -127,7 +135,7 @@ $dir.' does not exist and could not be created.'
 $retries = 3;
 while ($retries--) {
 try {
-file_put_contents($this->path, static::encode($hash, $options). ($options & self::JSON_PRETTY_PRINT ? "\n" : ''));
+$this->filePutContentsIfModified($this->path, static::encode($hash, $options). ($options & self::JSON_PRETTY_PRINT ? "\n" : ''));
 break;
 } catch (\Exception $e) {
 if ($retries) {
@@ -143,11 +151,25 @@ throw $e;
 
 
 
+private function filePutContentsIfModified($path, $content)
+{
+$currentContent = @file_get_contents($path);
+if (!$currentContent || ($currentContent != $content)) {
+return file_put_contents($path, $content);
+}
+
+return 0;
+}
 
 
 
 
-public function validateSchema($schema = self::STRICT_SCHEMA)
+
+
+
+
+
+public function validateSchema($schema = self::STRICT_SCHEMA, $schemaFile = null)
 {
 $content = file_get_contents($this->path);
 $data = json_decode($content);
@@ -156,7 +178,9 @@ if (null === $data && 'null' !== $content) {
 self::validateSyntax($content, $this->path);
 }
 
-$schemaFile = __DIR__ . '/../../../res/composer-schema.json';
+if (null === $schemaFile) {
+$schemaFile = __DIR__ . self::COMPOSER_SCHEMA_PATH;
+}
 
 
  if (false === strpos($schemaFile, '://')) {

@@ -37,6 +37,7 @@ private $debug;
 private $envAllowXdebug;
 private $envOriginalInis;
 private $loaded;
+private $persistent;
 private $script;
 
 private $statusWriter;
@@ -99,6 +100,17 @@ return $this;
 public function setMainScript($script)
 {
 $this->script = $script;
+return $this;
+}
+
+
+
+
+
+
+public function setPersistent()
+{
+$this->persistent = true;
 return $this;
 }
 
@@ -244,6 +256,13 @@ $this->doRestart($command);
 
 private function doRestart($command)
 {
+
+ 
+ if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
+pcntl_async_signals(true);
+pcntl_signal(SIGINT, SIG_IGN);
+}
+
 passthru($command, $exitCode);
 $this->notify(Status::INFO, 'Restarted process exited '.$exitCode);
 
@@ -271,15 +290,20 @@ private function prepareRestart()
 $error = '';
 $iniFiles = self::getAllIniFiles();
 $scannedInis = count($iniFiles) > 1;
+$tmpDir = sys_get_temp_dir();
 
 if (!$this->cli) {
 $error = 'Unsupported SAPI: '.PHP_SAPI;
 } elseif (!defined('PHP_BINARY')) {
 $error = 'PHP version is too old: '.PHP_VERSION;
+} elseif (!$this->checkConfiguration($info)) {
+$error = $info;
+} elseif (!$this->checkScanDirConfig()) {
+$error = 'PHP version does not report scanned inis: '.PHP_VERSION;
 } elseif (!$this->checkMainScript()) {
 $error = 'Unable to access main script: '.$this->script;
-} elseif (!$this->writeTmpIni($iniFiles)) {
-$error = 'Unable to create temporary ini file';
+} elseif (!$this->writeTmpIni($iniFiles, $tmpDir, $error)) {
+$error = $error ?: 'Unable to create temp ini file at: '.$tmpDir;
 } elseif (!$this->setEnvironment($scannedInis, $iniFiles)) {
 $error = 'Unable to set environment variables';
 }
@@ -298,9 +322,11 @@ return empty($error);
 
 
 
-private function writeTmpIni(array $iniFiles)
+
+
+private function writeTmpIni(array $iniFiles, $tmpDir, &$error)
 {
-if (!$this->tmpIni = tempnam(sys_get_temp_dir(), '')) {
+if (!$this->tmpIni = @tempnam($tmpDir, '')) {
 return false;
 }
 
@@ -313,8 +339,12 @@ $content = '';
 $regex = '/^\s*(zend_extension\s*=.*xdebug.*)$/mi';
 
 foreach ($iniFiles as $file) {
-$data = preg_replace($regex, ';$1', file_get_contents($file));
-$content .= $data.PHP_EOL;
+
+ if (($data = @file_get_contents($file)) === false) {
+$error = 'Unable to read ini: '.$file;
+return false;
+}
+$content .= preg_replace($regex, ';$1', $data).PHP_EOL;
 }
 
 
@@ -336,14 +366,19 @@ return @file_put_contents($this->tmpIni, $content);
 
 private function getCommand()
 {
+$php = array(PHP_BINARY);
 $args = array_slice($_SERVER['argv'], 1);
+
+if (!$this->persistent) {
+
+ array_push($php, '-n', '-c', $this->tmpIni);
+}
 
 if (defined('STDOUT') && Process::supportsColor(STDOUT)) {
 $args = Process::addColorOption($args, $this->colorOption);
 }
 
-$executable = array(PHP_BINARY, '-n', '-c', $this->tmpIni, $this->script);
-$args = array_merge($executable, $args);
+$args = array_merge($php, array($this->script), $args);
 
 $cmd = Process::escape(array_shift($args), true, true);
 foreach ($args as $arg) {
@@ -371,6 +406,13 @@ $phprc = getenv('PHPRC');
 
  if (!putenv($this->envOriginalInis.'='.implode(PATH_SEPARATOR, $iniFiles))) {
 return false;
+}
+
+if ($this->persistent) {
+
+ if (!putenv('PHP_INI_SCAN_DIR=') || !putenv('PHPRC='.$this->tmpIni)) {
+return false;
+}
 }
 
 
@@ -410,7 +452,9 @@ $content = '';
 
 foreach ($loadedConfig as $name => $value) {
 
- if (!is_string($value) || strpos($name, 'xdebug') === 0) {
+ if (!is_string($value)
+|| strpos($name, 'xdebug') === 0
+|| $name === 'apc.mmap_file_mask') {
 continue;
 }
 
@@ -483,5 +527,46 @@ if (false === getenv($this->envOriginalInis)) {
 
 self::$skipped = $settings['skipped'];
 $this->notify(Status::INFO, 'Process called with existing restart settings');
+}
+
+
+
+
+
+
+
+
+
+private function checkScanDirConfig()
+{
+return !(getenv('PHP_INI_SCAN_DIR')
+&& !PHP_CONFIG_FILE_SCAN_DIR
+&& (PHP_VERSION_ID < 70113
+|| PHP_VERSION_ID === 70200));
+}
+
+
+
+
+
+
+private function checkConfiguration(&$info)
+{
+if (false !== strpos(ini_get('disable_functions'), 'passthru')) {
+$info = 'passthru function is disabled';
+return false;
+}
+
+if (extension_loaded('uopz') && !ini_get('uopz.disable')) {
+
+ if (function_exists('uopz_allow_exit')) {
+@uopz_allow_exit(true);
+} else {
+$info = 'uopz extension is not compatible';
+return false;
+}
+}
+
+return true;
 }
 }

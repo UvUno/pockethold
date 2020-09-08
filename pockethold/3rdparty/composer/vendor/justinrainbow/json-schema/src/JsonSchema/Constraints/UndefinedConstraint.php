@@ -59,7 +59,7 @@ $path->setFromDefault();
 
 
 
-public function validateTypes(&$value, $schema = null, JsonPointer $path, $i = null)
+public function validateTypes(&$value, $schema, JsonPointer $path, $i = null)
 {
 
  if ($this->getTypeCheck()->isArray($value)) {
@@ -105,7 +105,7 @@ $this->checkEnum($value, $schema, $path, $i);
 
 
 
-protected function validateCommonProperties(&$value, $schema = null, JsonPointer $path, $i = '')
+protected function validateCommonProperties(&$value, $schema, JsonPointer $path, $i = '')
 {
 
  if (isset($schema->extends)) {
@@ -149,6 +149,12 @@ $path,
 'The property ' . $propertyName . ' is required',
 'required'
 );
+}
+} else {
+
+ 
+ if ($value instanceof self) {
+return;
 }
 }
 }

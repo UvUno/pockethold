@@ -13,9 +13,9 @@ namespace Symfony\Component\Console\Input;
 
 use Symfony\Component\Console\Descriptor\TextDescriptor;
 use Symfony\Component\Console\Descriptor\XmlDescriptor;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Exception\InvalidArgumentException;
 use Symfony\Component\Console\Exception\LogicException;
+use Symfony\Component\Console\Output\BufferedOutput;
 
 
 
@@ -138,7 +138,7 @@ if (!$this->hasArgument($name)) {
 throw new InvalidArgumentException(sprintf('The "%s" argument does not exist.', $name));
 }
 
-$arguments = is_int($name) ? array_values($this->arguments) : $this->arguments;
+$arguments = \is_int($name) ? array_values($this->arguments) : $this->arguments;
 
 return $arguments[$name];
 }
@@ -152,7 +152,7 @@ return $arguments[$name];
 
 public function hasArgument($name)
 {
-$arguments = is_int($name) ? array_values($this->arguments) : $this->arguments;
+$arguments = \is_int($name) ? array_values($this->arguments) : $this->arguments;
 
 return isset($arguments[$name]);
 }
@@ -174,7 +174,7 @@ return $this->arguments;
 
 public function getArgumentCount()
 {
-return $this->hasAnArrayArgument ? PHP_INT_MAX : count($this->arguments);
+return $this->hasAnArrayArgument ? PHP_INT_MAX : \count($this->arguments);
 }
 
 
@@ -381,7 +381,7 @@ $elements[] = sprintf('[%s--%s%s]', $shortcut, $option->getName(), $value);
 }
 }
 
-if (count($elements) && $this->getArguments()) {
+if (\count($elements) && $this->getArguments()) {
 $elements[] = '[--]';
 }
 
@@ -390,7 +390,7 @@ $element = '<'.$argument->getName().'>';
 if (!$argument->isRequired()) {
 $element = '['.$element.']';
 } elseif ($argument->isArray()) {
-$element = $element.' ('.$element.')';
+$element .= ' ('.$element.')';
 }
 
 if ($argument->isArray()) {

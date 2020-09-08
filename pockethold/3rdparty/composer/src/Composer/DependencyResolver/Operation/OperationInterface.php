@@ -24,7 +24,7 @@ interface OperationInterface
 
 
 
-public function getJobType();
+public function getOperationType();
 
 
 
@@ -32,6 +32,14 @@ public function getJobType();
 
 
 public function getReason();
+
+
+
+
+
+
+
+public function show($lock);
 
 
 

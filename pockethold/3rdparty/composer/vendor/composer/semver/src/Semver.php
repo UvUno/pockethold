@@ -37,9 +37,9 @@ self::$versionParser = new VersionParser();
 
 $versionParser = self::$versionParser;
 $provider = new Constraint('==', $versionParser->normalize($version));
-$constraints = $versionParser->parseConstraints($constraints);
+$parsedConstraints = $versionParser->parseConstraints($constraints);
 
-return $constraints->matches($provider);
+return $parsedConstraints->matches($provider);
 }
 
 
@@ -101,7 +101,9 @@ $normalized = array();
 
  
  foreach ($versions as $key => $version) {
-$normalized[] = array($versionParser->normalize($version), $key);
+$normalizedVersion = $versionParser->normalize($version);
+$normalizedVersion = $versionParser->normalizeDefaultBranch($normalizedVersion);
+$normalized[] = array($normalizedVersion, $key);
 }
 
 usort($normalized, function (array $left, array $right) use ($direction) {

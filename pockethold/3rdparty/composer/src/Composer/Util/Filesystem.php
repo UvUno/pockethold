@@ -23,11 +23,12 @@ use Symfony\Component\Finder\Finder;
 
 class Filesystem
 {
+
 private $processExecutor;
 
 public function __construct(ProcessExecutor $executor = null)
 {
-$this->processExecutor = $executor ?: new ProcessExecutor();
+$this->processExecutor = $executor;
 }
 
 public function remove($file)
@@ -57,7 +58,7 @@ $finder = Finder::create()
 ->depth(0)
 ->in($dir);
 
-return count($finder) === 0;
+return \count($finder) === 0;
 }
 
 public function emptyDirectory($dir, $ensureDirectoryExists = true)
@@ -115,7 +116,7 @@ if (preg_match('{^(?:[a-z]:)?[/\\\\]+$}i', $directory)) {
 throw new \RuntimeException('Aborting an attempted deletion of '.$directory.', this was probably not intended, if it is a real use case please report it.');
 }
 
-if (!function_exists('proc_open')) {
+if (!\function_exists('proc_open')) {
 return $this->removeDirectoryPhp($directory);
 }
 
@@ -199,9 +200,15 @@ $directory.' does not exist and could not be created.'
 
 public function unlink($path)
 {
-if (!@$this->unlinkImplementation($path)) {
+$unlinked = @$this->unlinkImplementation($path);
+if (!$unlinked) {
 
- if (!Platform::isWindows() || (usleep(350000) && !@$this->unlinkImplementation($path))) {
+ if (Platform::isWindows()) {
+usleep(350000);
+$unlinked = @$this->unlinkImplementation($path);
+}
+
+if (!$unlinked) {
 $error = error_get_last();
 $message = 'Could not delete '.$path.': ' . @$error['message'];
 if (Platform::isWindows()) {
@@ -224,9 +231,15 @@ return true;
 
 public function rmdir($path)
 {
-if (!@rmdir($path)) {
+$deleted = @rmdir($path);
+if (!$deleted) {
 
- if (!Platform::isWindows() || (usleep(350000) && !@rmdir($path))) {
+ if (Platform::isWindows()) {
+usleep(350000);
+$deleted = @rmdir($path);
+}
+
+if (!$deleted) {
 $error = error_get_last();
 $message = 'Could not delete '.$path.': ' . @$error['message'];
 if (Platform::isWindows()) {
@@ -279,6 +292,7 @@ $ri = new RecursiveIteratorIterator($it, RecursiveIteratorIterator::SELF_FIRST);
 $this->ensureDirectoryExists($target);
 
 $result = true;
+
 foreach ($ri as $file) {
 $targetPath = $target . DIRECTORY_SEPARATOR . $ri->getSubPathName();
 if ($file->isDir()) {
@@ -297,14 +311,16 @@ if (true === @rename($source, $target)) {
 return;
 }
 
-if (!function_exists('proc_open')) {
-return $this->copyThenRemove($source, $target);
+if (!\function_exists('proc_open')) {
+$this->copyThenRemove($source, $target);
+
+return;
 }
 
 if (Platform::isWindows()) {
 
  $command = sprintf('xcopy %s %s /E /I /Q /Y', ProcessExecutor::escape($source), ProcessExecutor::escape($target));
-$result = $this->processExecutor->execute($command, $output);
+$result = $this->getProcess()->execute($command, $output);
 
 
  clearstatcache();
@@ -318,7 +334,7 @@ return;
 
  
  $command = sprintf('mv %s %s', ProcessExecutor::escape($source), ProcessExecutor::escape($target));
-$result = $this->processExecutor->execute($command, $output);
+$result = $this->getProcess()->execute($command, $output);
 
 
  clearstatcache();
@@ -328,7 +344,7 @@ return;
 }
 }
 
-return $this->copyThenRemove($source, $target);
+$this->copyThenRemove($source, $target);
 }
 
 
@@ -353,13 +369,13 @@ if ($directories) {
 $from = rtrim($from, '/') . '/dummy_file';
 }
 
-if (dirname($from) === dirname($to)) {
+if (\dirname($from) === \dirname($to)) {
 return './'.basename($to);
 }
 
 $commonPath = $to;
 while (strpos($from.'/', $commonPath.'/') !== 0 && '/' !== $commonPath && !preg_match('{^[a-z]:/?$}i', $commonPath)) {
-$commonPath = strtr(dirname($commonPath), '\\', '/');
+$commonPath = strtr(\dirname($commonPath), '\\', '/');
 }
 
 if (0 !== strpos($from, $commonPath) || '/' === $commonPath) {
@@ -367,10 +383,10 @@ return $to;
 }
 
 $commonPath = rtrim($commonPath, '/') . '/';
-$sourcePathDepth = substr_count(substr($from, strlen($commonPath)), '/');
+$sourcePathDepth = substr_count(substr($from, \strlen($commonPath)), '/');
 $commonPathCode = str_repeat('../', $sourcePathDepth);
 
-return ($commonPathCode . substr($to, strlen($commonPath))) ?: './';
+return ($commonPathCode . substr($to, \strlen($commonPath))) ?: './';
 }
 
 
@@ -398,7 +414,7 @@ return $directories ? '__DIR__' : '__FILE__';
 
 $commonPath = $to;
 while (strpos($from.'/', $commonPath.'/') !== 0 && '/' !== $commonPath && !preg_match('{^[a-z]:/?$}i', $commonPath) && '.' !== $commonPath) {
-$commonPath = strtr(dirname($commonPath), '\\', '/');
+$commonPath = strtr(\dirname($commonPath), '\\', '/');
 }
 
 if (0 !== strpos($from, $commonPath) || '/' === $commonPath || '.' === $commonPath) {
@@ -407,17 +423,17 @@ return var_export($to, true);
 
 $commonPath = rtrim($commonPath, '/') . '/';
 if (strpos($to, $from.'/') === 0) {
-return '__DIR__ . '.var_export(substr($to, strlen($from)), true);
+return '__DIR__ . '.var_export(substr($to, \strlen($from)), true);
 }
-$sourcePathDepth = substr_count(substr($from, strlen($commonPath)), '/') + $directories;
+$sourcePathDepth = substr_count(substr($from, \strlen($commonPath)), '/') + $directories;
 if ($staticCode) {
 $commonPathCode = "__DIR__ . '".str_repeat('/..', $sourcePathDepth)."'";
 } else {
 $commonPathCode = str_repeat('dirname(', $sourcePathDepth).'__DIR__'.str_repeat(')', $sourcePathDepth);
 }
-$relTarget = substr($to, strlen($commonPath));
+$relTarget = substr($to, \strlen($commonPath));
 
-return $commonPathCode . (strlen($relTarget) ? '.' . var_export('/' . $relTarget, true) : '');
+return $commonPathCode . (\strlen($relTarget) ? '.' . var_export('/' . $relTarget, true) : '');
 }
 
 
@@ -428,7 +444,7 @@ return $commonPathCode . (strlen($relTarget) ? '.' . var_export('/' . $relTarget
 
 public function isAbsolutePath($path)
 {
-return substr($path, 0, 1) === '/' || substr($path, 1, 1) === ':';
+return substr($path, 0, 1) === '/' || substr($path, 1, 1) === ':' || substr($path, 0, 2) === '\\\\';
 }
 
 
@@ -468,7 +484,7 @@ $absolute = false;
 
  if (preg_match('{^( [0-9a-z]{2,}+: (?: // (?: [a-z]: )? )? | [a-z]: )}ix', $path, $match)) {
 $prefix = $match[1];
-$path = substr($path, strlen($prefix));
+$path = substr($path, \strlen($prefix));
 }
 
 if (substr($path, 0, 1) === '/') {
@@ -525,9 +541,16 @@ $size += $file->getSize();
 return $size;
 }
 
+
+
+
 protected function getProcess()
 {
-return new ProcessExecutor;
+if (!$this->processExecutor) {
+$this->processExecutor = new ProcessExecutor();
+}
+
+return $this->processExecutor;
 }
 
 
@@ -560,7 +583,7 @@ public function relativeSymlink($target, $link)
 $cwd = getcwd();
 
 $relativePath = $this->findShortestPath($link, $target);
-chdir(dirname($link));
+chdir(\dirname($link));
 $result = @symlink($relativePath, $link);
 
 chdir($cwd);
@@ -613,7 +636,7 @@ return $pathname;
 
 $resolved = rtrim($pathname, '/');
 
-if (!strlen($resolved)) {
+if (!\strlen($resolved)) {
 return $pathname;
 }
 
@@ -651,30 +674,37 @@ clearstatcache(true, $junction);
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 public function isJunction($junction)
 {
 if (!Platform::isWindows()) {
 return false;
 }
+
+
+ clearstatcache(true, $junction);
+
 if (!is_dir($junction) || is_link($junction)) {
 return false;
 }
 
-
-
-
-
-
-
-
-
-
-
-clearstatcache(true, $junction);
-clearstatcache(false);
 $stat = lstat($junction);
 
-return !($stat['mode'] & 0xC000);
+
+ return $stat ? 0x4000 !== ($stat['mode'] & 0xF000) : false;
 }
 
 
@@ -692,9 +722,64 @@ $junction = rtrim(str_replace('/', DIRECTORY_SEPARATOR, $junction), DIRECTORY_SE
 if (!$this->isJunction($junction)) {
 throw new IOException(sprintf('%s is not a junction and thus cannot be removed as one', $junction));
 }
-$cmd = sprintf('rmdir /S /Q %s', ProcessExecutor::escape($junction));
-clearstatcache(true, $junction);
 
-return ($this->getProcess()->execute($cmd, $output) === 0);
+return $this->rmdir($junction);
+}
+
+public function filePutContentsIfModified($path, $content)
+{
+$currentContent = @file_get_contents($path);
+if (!$currentContent || ($currentContent != $content)) {
+return file_put_contents($path, $content);
+}
+
+return 0;
+}
+
+
+
+
+
+
+
+public function safeCopy($source, $target)
+{
+if (!file_exists($target) || !file_exists($source) || !$this->filesAreEqual($source, $target)) {
+$source = fopen($source, 'r');
+$target = fopen($target, 'w+');
+
+stream_copy_to_stream($source, $target);
+fclose($source);
+fclose($target);
+}
+}
+
+
+
+
+
+private function filesAreEqual($a, $b)
+{
+
+ if (filesize($a) !== filesize($b)) {
+return false;
+}
+
+
+ $ah = fopen($a, 'rb');
+$bh = fopen($b, 'rb');
+
+$result = true;
+while (!feof($ah)) {
+if (fread($ah, 8192) != fread($bh, 8192)) {
+$result = false;
+break;
+}
+}
+
+fclose($ah);
+fclose($bh);
+
+return $result;
 }
 }

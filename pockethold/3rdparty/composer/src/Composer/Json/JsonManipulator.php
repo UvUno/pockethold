@@ -22,7 +22,7 @@ class JsonManipulator
 private static $DEFINES = '(?(DEFINE)
        (?<number>   -? (?= [1-9]|0(?!\d) ) \d+ (\.\d+)? ([eE] [+-]? \d+)? )
        (?<boolean>   true | false | null )
-       (?<string>    " ([^"\\\\]* | \\\\ ["\\\\bfnrt\/] | \\\\ u [0-9a-f]{4} )* " )
+       (?<string>    " ([^"\\\\]* | \\\\ ["\\\\bfnrt\/] | \\\\ u [0-9A-Fa-f]{4} )* " )
        (?<array>     \[  (?:  (?&json) \s* (?: , (?&json) \s* )*  )?  \s* \] )
        (?<pair>      \s* (?&string) \s* : (?&json) \s* )
        (?<object>    \{  (?:  (?&pair)  (?: , (?&pair)  )*  )?  \s* \} )
@@ -167,6 +167,10 @@ return $this->removeSubNode('config', $name);
 
 public function addProperty($name, $value)
 {
+if (substr($name, 0, 8) === 'suggest.') {
+return $this->addSubNode('suggest', substr($name, 8), $value);
+}
+
 if (substr($name, 0, 6) === 'extra.') {
 return $this->addSubNode('extra', substr($name, 6), $value);
 }
@@ -180,6 +184,10 @@ return $this->addMainKey($name, $value);
 
 public function removeProperty($name)
 {
+if (substr($name, 0, 8) === 'suggest.') {
+return $this->removeSubNode('suggest', substr($name, 8));
+}
+
 if (substr($name, 0, 6) === 'extra.') {
 return $this->removeSubNode('extra', substr($name, 6));
 }
@@ -326,9 +334,10 @@ return true;
 }
 
 
- if ($this->pregMatch('{"'.preg_quote($name).'"\s*:}i', $children)) {
+ $keyRegex = str_replace('/', '\\\\?/', preg_quote($name));
+if ($this->pregMatch('{"'.$keyRegex.'"\s*:}i', $children)) {
 
- if (preg_match_all('{'.self::$DEFINES.'"'.preg_quote($name).'"\s*:\s*(?:(?&json))}x', $children, $matches)) {
+ if (preg_match_all('{'.self::$DEFINES.'"'.$keyRegex.'"\s*:\s*(?:(?&json))}x', $children, $matches)) {
 $bestMatch = '';
 foreach ($matches[0] as $match) {
 if (strlen($bestMatch) < strlen($match)) {
@@ -345,6 +354,10 @@ return false;
 }
 } else {
 $childrenClean = $children;
+}
+
+if (!isset($childrenClean)) {
+throw new \InvalidArgumentException("JsonManipulator: \$childrenClean is not defined. Please report at https://github.com/composer/composer/issues/new.");
 }
 
 

@@ -14,10 +14,9 @@ namespace Composer\IO;
 
 use Composer\Config;
 use Composer\Util\ProcessExecutor;
-use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 
-abstract class BaseIO implements IOInterface, LoggerInterface
+abstract class BaseIO implements IOInterface
 {
 protected $authentications = array();
 
@@ -27,6 +26,14 @@ protected $authentications = array();
 public function getAuthentications()
 {
 return $this->authentications;
+}
+
+
+
+
+public function resetAuthentications()
+{
+$this->authentications = array();
 }
 
 
@@ -55,6 +62,22 @@ return array('username' => null, 'password' => null);
 public function setAuthentication($repositoryName, $username, $password = null)
 {
 $this->authentications[$repositoryName] = array('username' => $username, 'password' => $password);
+}
+
+
+
+
+public function writeRaw($messages, $newline = true, $verbosity = self::NORMAL)
+{
+$this->write($messages, $newline, $verbosity);
+}
+
+
+
+
+public function writeErrorRaw($messages, $newline = true, $verbosity = self::NORMAL)
+{
+$this->writeError($messages, $newline, $verbosity);
 }
 
 
@@ -92,6 +115,7 @@ $githubOauth = $config->get('github-oauth') ?: array();
 $gitlabOauth = $config->get('gitlab-oauth') ?: array();
 $gitlabToken = $config->get('gitlab-token') ?: array();
 $httpBasic = $config->get('http-basic') ?: array();
+$bearerToken = $config->get('bearer') ?: array();
 
 
 
@@ -111,12 +135,18 @@ $this->checkAndSetAuthentication($domain, $token, 'oauth2');
 }
 
 foreach ($gitlabToken as $domain => $token) {
-$this->checkAndSetAuthentication($domain, $token, 'private-token');
+$username = is_array($token) && array_key_exists("username", $token) ? $token["username"] : $token;
+$password = is_array($token) && array_key_exists("token", $token) ? $token["token"] : 'private-token';
+$this->checkAndSetAuthentication($domain, $username, $password);
 }
 
 
  foreach ($httpBasic as $domain => $cred) {
 $this->checkAndSetAuthentication($domain, $cred['username'], $cred['password']);
+}
+
+foreach ($bearerToken as $domain => $token) {
+$this->checkAndSetAuthentication($domain, $token, 'bearer');
 }
 
 

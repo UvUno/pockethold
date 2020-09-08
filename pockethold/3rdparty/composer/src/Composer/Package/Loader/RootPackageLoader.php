@@ -15,6 +15,7 @@ namespace Composer\Package\Loader;
 use Composer\Package\BasePackage;
 use Composer\Package\AliasPackage;
 use Composer\Config;
+use Composer\IO\IOInterface;
 use Composer\Package\RootPackageInterface;
 use Composer\Repository\RepositoryFactory;
 use Composer\Package\Version\VersionGuesser;
@@ -46,13 +47,19 @@ private $config;
 
 private $versionGuesser;
 
-public function __construct(RepositoryManager $manager, Config $config, VersionParser $parser = null, VersionGuesser $versionGuesser = null)
+
+
+
+private $io;
+
+public function __construct(RepositoryManager $manager, Config $config, VersionParser $parser = null, VersionGuesser $versionGuesser = null, IOInterface $io = null)
 {
 parent::__construct($parser);
 
 $this->manager = $manager;
 $this->config = $config;
-$this->versionGuesser = $versionGuesser ?: new VersionGuesser($config, new ProcessExecutor(), $this->versionParser);
+$this->versionGuesser = $versionGuesser ?: new VersionGuesser($config, new ProcessExecutor($io), $this->versionParser);
+$this->io = $io;
 }
 
 
@@ -65,6 +72,8 @@ public function load(array $config, $class = 'Composer\Package\RootPackage', $cw
 {
 if (!isset($config['name'])) {
 $config['name'] = '__root__';
+} elseif ($err = ValidatingArrayLoader::hasPackageNamingError($config['name'])) {
+throw new \RuntimeException('Your package name '.$err);
 }
 $autoVersioned = false;
 if (!isset($config['version'])) {
@@ -128,12 +137,22 @@ $links[$link->getTarget()] = $link->getConstraint()->getPrettyString();
 $aliases = $this->extractAliases($links, $aliases);
 $stabilityFlags = $this->extractStabilityFlags($links, $stabilityFlags, $realPackage->getMinimumStability());
 $references = $this->extractReferences($links, $references);
+
+if (isset($links[$config['name']])) {
+throw new \RuntimeException(sprintf('Root package \'%s\' cannot require itself in its composer.json' . PHP_EOL .
+'Did you accidentally name your root package after an external package?', $config['name']));
+}
 }
 }
 
-if (isset($links[$config['name']])) {
-throw new \InvalidArgumentException(sprintf('Root package \'%s\' cannot require itself in its composer.json' . PHP_EOL .
-'Did you accidentally name your root package after an external package?', $config['name']));
+foreach (array_keys(BasePackage::$supportedLinkTypes) as $linkType) {
+if (isset($config[$linkType])) {
+foreach ($config[$linkType] as $linkName => $constraint) {
+if ($err = ValidatingArrayLoader::hasPackageNamingError($linkName, true)) {
+throw new \RuntimeException($linkType.'.'.$err);
+}
+}
+}
 }
 
 $realPackage->setAliases($aliases);

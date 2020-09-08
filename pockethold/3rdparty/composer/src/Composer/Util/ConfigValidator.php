@@ -28,6 +28,8 @@ use Composer\Spdx\SpdxLicenses;
 
 class ConfigValidator
 {
+const CHECK_VERSION = 1;
+
 private $io;
 
 public function __construct(IOInterface $io)
@@ -43,7 +45,8 @@ $this->io = $io;
 
 
 
-public function validate($file, $arrayLoaderValidationFlags = ValidatingArrayLoader::CHECK_ALL)
+
+public function validate($file, $arrayLoaderValidationFlags = ValidatingArrayLoader::CHECK_ALL, $flags = self::CHECK_VERSION)
 {
 $errors = array();
 $publishErrors = array();
@@ -109,7 +112,7 @@ $license
 }
 }
 
-if (isset($manifest['version'])) {
+if (($flags & self::CHECK_VERSION) && isset($manifest['version'])) {
 $warnings[] = 'The version field is present, it is recommended to leave it out if the package is published on Packagist.';
 }
 
@@ -171,8 +174,8 @@ if (isset($manifest['autoload']['psr-4'][''])) {
 $warnings[] = "Defining autoload.psr-4 with an empty namespace prefix is a bad idea for performance";
 }
 
-try {
 $loader = new ValidatingArrayLoader(new ArrayLoader(), true, null, $arrayLoaderValidationFlags);
+try {
 if (!isset($manifest['version'])) {
 $manifest['version'] = '1.0.0';
 }
