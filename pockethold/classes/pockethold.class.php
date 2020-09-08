@@ -52,16 +52,8 @@ class Pockethold {
 
         if ( file_exists($this->tpath . '3rdparty/composer/vendor/autoload.php') ) {
             $i = "flarum";
-            if ( file_exists($this->lpath . 'bazaar.done' ) ) {
-                $i = "cleanup";
-                return $i;
-            }
-            if ( file_exists($this->lpath . 'bazaar.start' ) ) {
-                $i = "waiting";
-                return $i;
-            }
             if ( file_exists($this->lpath . 'flarum.done' ) ) {
-                $i = "bazaar";
+                $i = "cleanup";
                 return $i;
             }
             if ( file_exists($this->lpath . 'flarum.start' ) ) {
