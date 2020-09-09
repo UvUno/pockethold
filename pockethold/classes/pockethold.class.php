@@ -23,6 +23,10 @@ class Pockethold {
         {
             mkdir($this->tpath);
         }
+		if ( !file_exists($this->tpath$this->lpath . 'ajax.log') )
+        {
+            touch($this->lpath . 'ajax.log');
+        }
     }
 
     /**
@@ -186,9 +190,7 @@ class Pockethold {
             if( file_exists($this->lpath . 'flarum.start' )){
                 $logfile = "flarum.log";
             }
-            if( file_exists($this->lpath . 'bazaar.start' )){
-                $logfile = "bazaar.log";
-            }
+
             if ( $logfile !== "Console output not ready yet"){
                 echo $this->composerProgress($logfile);
             } else
