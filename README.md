@@ -3,7 +3,6 @@
 
 # Web-based flarum installer/downloader
 * Goal: Provide a non shell alternative for installing Flarum.
-* (Also install [bazaar](https://github.com/flagrow/bazaar)!)
 
 Requirements.
 1. cUrl or allow_url_fopen, proc_open)
