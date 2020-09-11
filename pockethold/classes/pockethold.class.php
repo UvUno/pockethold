@@ -23,7 +23,7 @@ class Pockethold {
         {
             mkdir($this->tpath);
         }
-		if ( !file_exists($this->tpath$this->lpath . 'ajax.log') )
+	if ( !file_exists($this->lpath . 'ajax.log') )
         {
             touch($this->lpath . 'ajax.log');
         }
