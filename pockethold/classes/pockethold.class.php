@@ -178,7 +178,7 @@ class Pockethold {
                 $this->getComposer();
             } elseif ($request == 'flarum') {
                 echo 'Initiated';
-                $this->phcomposer('create-project flarum/flarum ./pockethold/download --stability=beta --prefer-dist --no-progress -n', 'flarum');
+                $this->phcomposer('create-project flarum/flarum . --stability=beta --prefer-dist --no-progress -n', 'flarum');
             } elseif ($request == 'cleanup') {
                 echo 'Initiated';
                 $this->cleanup();
@@ -200,10 +200,10 @@ class Pockethold {
 
     private function cleanup() {
 
-        $this->rmove($this->tpath . "download/", $this->ipath);
+        // $this->rmove($this->tpath . "download/", $this->ipath);
         $this->rmove($this->tpath . "3rdparty/flarum/", $this->ipath);
         $this->rrmdir($this->ipath . 'public/');
-        unlink($this->ipath . "installer.php");
+        // unlink($this->ipath . "installer.php");
         $this->rrmdir($this->tpath);
         echo "Complete";
     }

@@ -333,9 +333,7 @@ $io->writeError('<info>Creating a "' . $packageName . '" project at "' . $fs->fi
 if (file_exists($directory)) {
 if (!is_dir($directory)) {
 throw new \InvalidArgumentException('Cannot create project directory at "'.$directory.'", it exists as a file.');
-} elseif (!$fs->isDirEmpty($directory)) {
-throw new \InvalidArgumentException('Project directory "'.$directory.'" is not empty.');
-}
+} 
 }
 
 if (null === $stability) {
