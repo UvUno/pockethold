@@ -61,9 +61,11 @@ return false;
 public function download(PackageInterface $package, PackageInterface $prevPackage = null)
 {
 $installPath = $this->installPath;
+
+/*
 if (file_exists($installPath) && !$this->filesystem->isDirEmpty($installPath)) {
 throw new \InvalidArgumentException("Project directory $installPath is not empty.");
-}
+} */
 if (!is_dir($installPath)) {
 mkdir($installPath, 0777, true);
 }
