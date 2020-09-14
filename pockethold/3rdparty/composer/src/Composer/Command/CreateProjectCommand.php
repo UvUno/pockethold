@@ -295,7 +295,7 @@ $vendorComposerDir = $config->get('vendor-dir').'/composer';
 if (is_dir($vendorComposerDir) && $fs->isDirEmpty($vendorComposerDir)) {
 Silencer::call('rmdir', $vendorComposerDir);
 $vendorDir = $config->get('vendor-dir');
-if (is_dir($vendorDir) && $fs->isDirEmpty($vendorDir)) {
+if (is_dir($vendorDir) && $fs->isDirEmpty($vendorDir))	{
 Silencer::call('rmdir', $vendorDir);
 }
 }
