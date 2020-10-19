@@ -2,7 +2,7 @@
 
 
 # Web-based flarum installer/downloader
-* Goal: Provide a non shell alternative for installing Flarum.
+* Goal: Provide a non-shell alternative for installing [Flarum](https://github.com/flarum/flarum).
 
 Requirements.
 1. cUrl or allow_url_fopen, proc_open)
