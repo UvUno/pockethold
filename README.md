@@ -1,7 +1,7 @@
 <img alt="Pockethold" src="https://i.imgur.com/k5tMKCG.png">
 
 
-# Web-based flarum installer/downloader
+# Web-based Flarum installer/downloader
 * Goal: Provide a non-shell alternative for installing [Flarum](https://github.com/flarum/flarum).
 
 Requirements.
